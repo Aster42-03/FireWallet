@@ -1,8 +1,11 @@
 /**
  * FireWallet Client API Service
  * ==============================
- * Centralized fetch client wrapping backend FastAPI v1 endpoints.
- * Handles headers, JSON encoding, and error extraction.
+ * Centralized fetch client wrapping backend FastAPI v1 endpoints, including:
+ * - Trinity Buckets, HUD Summary & AG Grid Deep Ledger
+ * - Quick Intent Firewall & Short-Tag RAG History
+ * - Escape Window & Zero-Delay Emergency Overrides
+ * - Unified Monolithic Coach (`CoachDecision` + 1-Tap `ActionCard` Execution)
  */
 
 const API_BASE = '/api/v1';
@@ -26,24 +29,33 @@ export async function fetchDeepLedger(params = {}) {
   return res.json();
 }
 
-export async function submitIntent(utterance, amountCents, merchantName = '') {
+export async function submitIntent(utterance, amountCents, merchantName = '', shortTag = undefined) {
+  const payload = {
+    utterance,
+    amount: amountCents,
+    currency: 'USD',
+    merchant_name: merchantName
+  };
+  if (shortTag) payload.short_tag = shortTag;
+
   const res = await fetch(`${API_BASE}/intents`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Idempotency-Key': `client-${Date.now()}`
     },
-    body: JSON.stringify({
-      utterance,
-      amount: amountCents,
-      currency: 'USD',
-      merchant_name: merchantName
-    })
+    body: JSON.stringify(payload)
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || 'Failed to submit intent');
   }
+  return res.json();
+}
+
+export async function fetchIntentTags() {
+  const res = await fetch(`${API_BASE}/intents/tags`);
+  if (!res.ok) throw new Error('Failed to load recorded intent tags');
   return res.json();
 }
 
@@ -92,10 +104,17 @@ export async function checkCooldown(overrideId) {
   return res.json();
 }
 
-export async function sendCoachMessage(utterance, chartId = null, filterContext = null, threadId = null) {
+export async function sendCoachMessage(
+  utterance,
+  chartId = null,
+  filterContext = null,
+  threadId = null,
+  signal = undefined
+) {
   const res = await fetch(`${API_BASE}/coach/messages`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    signal,
     body: JSON.stringify({
       utterance,
       chart_id: chartId,
@@ -106,6 +125,32 @@ export async function sendCoachMessage(utterance, chartId = null, filterContext 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || 'Coach is currently offline');
+  }
+  return res.json();
+}
+
+export async function executeCoachAction(actionCard, autoCaptureDemo = true) {
+  const res = await fetch(`${API_BASE}/coach/execute-action`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action_type: actionCard.action_type,
+      utterance: actionCard.utterance,
+      short_tag: actionCard.short_tag,
+      amount_cents: actionCard.amount_cents,
+      currency: actionCard.currency || 'USD',
+      category: actionCard.category,
+      necessity: actionCard.necessity,
+      target_bucket: actionCard.target_bucket,
+      merchant_name: actionCard.merchant_name,
+      intent_id: actionCard.intent_id,
+      is_emergency: Boolean(actionCard.is_emergency),
+      auto_capture_demo: autoCaptureDemo
+    })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to execute 1-tap Coach action');
   }
   return res.json();
 }

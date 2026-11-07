@@ -260,6 +260,7 @@ async def seeded_session(session: AsyncSession) -> AsyncSession:
     intent_g = Intent(
         user_id=user.id,
         utterance="Weekly groceries at Trader Joe's",
+        short_tag="groceries",
         amount=4400,
         currency="USD",
         merchant_name="Trader Joe's",
@@ -296,6 +297,7 @@ async def seeded_session(session: AsyncSession) -> AsyncSession:
     intent_t = Intent(
         user_id=user.id,
         utterance="Subway weekly pass recharge",
+        short_tag="subway transit pass",
         amount=2400,
         currency="USD",
         merchant_name="MTA Transit",
@@ -332,6 +334,7 @@ async def seeded_session(session: AsyncSession) -> AsyncSession:
     intent_d = Intent(
         user_id=user.id,
         utterance="Dinner and drinks at Toki Ramen",
+        short_tag="ramen dinner",
         amount=3800,
         currency="USD",
         merchant_name="Toki Ramen",
@@ -368,6 +371,7 @@ async def seeded_session(session: AsyncSession) -> AsyncSession:
     intent_c = Intent(
         user_id=user.id,
         utterance="Indie band concert ticket",
+        short_tag="concert ticket",
         amount=2200,
         currency="USD",
         merchant_name="Ticketmaster",

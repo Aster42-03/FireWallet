@@ -34,7 +34,12 @@ import {
 } from 'lucide-react';
 import { fetchDeepLedger } from '../../shared/api';
 
-export default function DeepLedgerGrid({ onAnalyzeWithCoach, isCoachOpen, onToggleCoach }) {
+export default function DeepLedgerGrid({
+  refreshTrigger = 0,
+  onAnalyzeWithCoach,
+  isCoachOpen,
+  onToggleCoach
+}) {
   const gridRef = useRef(null);
   const [gridApi, setGridApi] = useState(null);
   const [data, setData] = useState([]);
@@ -69,7 +74,7 @@ export default function DeepLedgerGrid({ onAnalyzeWithCoach, isCoachOpen, onTogg
 
   useEffect(() => {
     loadLedger();
-  }, [loadLedger]);
+  }, [loadLedger, refreshTrigger]);
 
   // Client-side view mode filtering
   const displayedRows = useMemo(() => {
@@ -298,6 +303,20 @@ export default function DeepLedgerGrid({ onAnalyzeWithCoach, isCoachOpen, onTogg
         headerName: 'State',
         width: 95,
         cellRenderer: stateRenderer
+      },
+      {
+        field: 'short_tag',
+        headerName: 'RAG Tag',
+        width: 145,
+        cellRenderer: (params) => {
+          const val = params.value;
+          if (!val) return null;
+          return (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-950/80 text-indigo-300 border border-indigo-800/80">
+              #{val}
+            </span>
+          );
+        }
       },
       {
         field: 'category',

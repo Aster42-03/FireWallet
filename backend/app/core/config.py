@@ -6,25 +6,47 @@ Loads settings from environment variables and optional .env file.
 """
 
 import os
+from pathlib import Path
 from typing import List
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
+
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
+def resolve_database_url() -> str:
+    """
+    Resolves DATABASE_URL. If using default SQLite, guarantees an absolute path
+    pointing to the canonical project database file so execution from any directory
+    (root, backend/, etc.) always accesses the same database.
+    """
+    raw = os.environ.get("DATABASE_URL", "")
+    if raw:
+        return raw
+    # If SQLite file path, anchor it to project root
+    db_file = BASE_DIR / "firewallet.db"
+    return f"sqlite+aiosqlite:///{db_file}"
 
 class Settings(BaseSettings):
     """
     Global application settings.
     Attributes are loaded from environment variables or .env with fallbacks.
     """
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=(
+            str(BASE_DIR / ".env"),
+            str(BASE_DIR.parent / ".env"),
+            ".env"
+        ),
+        extra="ignore"
+    )
 
     PROJECT_NAME: str = "FireWallet"
     VERSION: str = "0.1.0"
     API_V1_STR: str = "/api/v1"
     
     # Database Configuration
-    # Uses SQLite (aiosqlite) for zero-config local dev and PostgreSQL (asyncpg) for production/Render
     DATABASE_URL: str = Field(
-        default="sqlite+aiosqlite:///./firewallet.db",
+        default_factory=resolve_database_url,
         description="Database connection string (SQLite for local dev, PostgreSQL for production)"
     )
     
@@ -37,7 +59,12 @@ class Settings(BaseSettings):
     PAYPAL_VAULT_RECEIVER_EMAIL: str = "vault-receiver@sandbox.paypal.com"
     PAYPAL_BILL_PAYEE_EMAIL: str = "landlord@sandbox.paypal.com"
     
-    # LLM Service (OpenAI-compatible inference endpoint for Intent Gateway & Coach)
+    # Groq Primary LLM Service (Ultra-fast Llama 3.3 70B Versatile for Monolithic CoachDecision)
+    GROQ_API_KEY: str = ""
+    GROQ_BASE_URL: str = "https://api.groq.com/openai/v1"
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+
+    # Secondary LLM Fallback Service (OpenAI-compatible inference endpoint: gpt-4o-mini)
     LLM_BASE_URL: str = "https://api.openai.com/v1"
     LLM_API_KEY: str = ""
     LLM_MODEL: str = "gpt-4o-mini"

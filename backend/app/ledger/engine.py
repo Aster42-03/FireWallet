@@ -149,7 +149,8 @@ class LedgerEngine:
         bucket_id: UUID,
         amount_minor: int,
         intent_id: UUID,
-        paypal_order_id: Optional[str] = None
+        paypal_order_id: Optional[str] = None,
+        memo: Optional[str] = None
     ) -> LedgerEntry:
         """
         Place a debit hold on the bucket before initiating external PayPal checkout.
@@ -162,6 +163,7 @@ class LedgerEngine:
             amount_minor: Positive amount in cents.
             intent_id: Associated Intent UUID.
             paypal_order_id: Optional PayPal Order ID from Orders v2 API.
+            memo: Optional concise audit memo or short_tag.
             
         Returns:
             LedgerEntry: The created hold ledger entry.
@@ -176,6 +178,9 @@ class LedgerEngine:
             amount=-abs(amount_minor),  # Holds debit available balance
             currency="USD",
             state="hold",
+            entry_kind="merchant_spend",
+            counterparty_bucket="paypal_merchant",
+            memo=memo,
             intent_id=intent_id,
             paypal_order_id=paypal_order_id,
             idempotency_key=idempotency_key,
@@ -190,7 +195,8 @@ class LedgerEngine:
     async def settle_hold(
         session: AsyncSession,
         intent_id: UUID,
-        paypal_capture_id: str
+        paypal_capture_id: str,
+        commit: bool = True
     ) -> Optional[LedgerEntry]:
         """
         Convert a pending hold into a settled posted debit upon receiving PayPal capture.
@@ -199,6 +205,8 @@ class LedgerEngine:
             session: Active database AsyncSession.
             intent_id: Associated Intent UUID.
             paypal_capture_id: PayPal Capture ID from webhook or capture response.
+            commit: When True (default), commits immediately; when False, flushes within
+                    caller's atomic transaction block (e.g., PayPal webhook router).
             
         Returns:
             Optional[LedgerEntry]: Updated ledger entry if hold existed.
@@ -211,12 +219,19 @@ class LedgerEngine:
             entry.paypal_capture_id = paypal_capture_id
             entry.posted_at = utc_now()
             session.add(entry)
-            await session.commit()
-            await session.refresh(entry)
+            if commit:
+                await session.commit()
+                await session.refresh(entry)
+            else:
+                await session.flush()
         return entry
 
     @staticmethod
-    async def release_hold(session: AsyncSession, intent_id: UUID) -> bool:
+    async def release_hold(
+        session: AsyncSession,
+        intent_id: UUID,
+        commit: bool = True
+    ) -> bool:
         """
         Release a hold if PayPal payment is canceled or fails.
         Restores available balance without altering historical transaction audit log.
@@ -224,6 +239,8 @@ class LedgerEngine:
         Args:
             session: Active database AsyncSession.
             intent_id: Associated Intent UUID.
+            commit: When True (default), commits immediately; when False, flushes within
+                    caller's atomic transaction block.
             
         Returns:
             bool: True if hold was found and released.
@@ -234,7 +251,10 @@ class LedgerEngine:
         if entry:
             entry.state = "released"
             session.add(entry)
-            await session.commit()
+            if commit:
+                await session.commit()
+            else:
+                await session.flush()
             return True
         return False
 

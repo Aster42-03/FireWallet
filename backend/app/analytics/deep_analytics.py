@@ -92,7 +92,15 @@ async def query_deep_ledger(
 
     # 3. Build query for filtered rows
     stmt = (
-        select(LedgerEntry, Intent.category, Intent.utterance, Intent.merchant_name, Intent.necessity, Bucket.kind)
+        select(
+            LedgerEntry,
+            Intent.category,
+            Intent.utterance,
+            Intent.merchant_name,
+            Intent.necessity,
+            Intent.short_tag,
+            Bucket.kind,
+        )
         .join(Intent, LedgerEntry.intent_id == Intent.id, isouter=True)
         .join(Bucket, LedgerEntry.bucket_id == Bucket.id, isouter=True)
         .where(LedgerEntry.user_id == user_id)
@@ -131,7 +139,7 @@ async def query_deep_ledger(
 
     internal_kinds = {"vault_skim", "bill_reserve", "freedom_allocation", "morning_topup", "internal_transfer"}
 
-    for entry, cat, utt, merch, nec, b_kind in paged_rows:
+    for entry, cat, utt, merch, nec, s_tag, b_kind in paged_rows:
         is_internal = entry.entry_kind in internal_kinds
 
         if entry.amount < 0:
@@ -149,11 +157,20 @@ async def query_deep_ledger(
             active_holds += abs(entry.amount)
 
         direction = "CREDIT" if entry.amount >= 0 else "DEBIT"
+        derived_tag = s_tag or (
+            "payday deposit" if entry.entry_kind == "payday_inflow"
+            else "vault skim" if entry.entry_kind == "vault_skim"
+            else "rent reserve" if entry.entry_kind == "bill_reserve"
+            else "freedom credit" if entry.entry_kind == "freedom_allocation"
+            else "daily top-up" if entry.entry_kind == "morning_topup"
+            else (cat or "general").replace("_", " ")
+        )
 
         items.append({
             "id": entry.id,
             "transfer_id": entry.transfer_id,
             "created_at": entry.created_at.isoformat(),
+            "short_tag": derived_tag,
             "category": cat or ("income" if entry.amount > 0 else "allocation" if is_internal else "general"),
             "bucket": b_kind or "unknown",
             "amount": entry.amount,

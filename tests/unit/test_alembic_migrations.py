@@ -8,7 +8,7 @@ from sqlalchemy import create_engine, inspect
 @pytest.mark.unit
 def test_alembic_migrations_lifecycle():
     """
-    Verifies that Alembic migration scripts (0001_initial_schema -> 0002_add_double_entry)
+    Verifies that Alembic migration scripts (0001_initial_schema -> 0002_add_double_entry -> 0003_phase3_rag_status)
     can apply to a pristine database, downgrade back to base, and re-upgrade to head cleanly.
     """
     # Create temporary database file
@@ -43,6 +43,18 @@ def test_alembic_migrations_lifecycle():
         assert "entry_kind" in columns
         assert "counterparty_bucket" in columns
         assert "memo" in columns
+
+        intent_cols = [col["name"] for col in inspector.get_columns("intents")]
+        assert "short_tag" in intent_cols
+        assert "is_emergency" in intent_cols
+
+        coach_msg_cols = [col["name"] for col in inspector.get_columns("coach_messages")]
+        assert "short_tag" in coach_msg_cols
+        assert "action_card_json" in coach_msg_cols
+
+        webhook_cols = [col["name"] for col in inspector.get_columns("paypal_webhook_events")]
+        assert "status" in webhook_cols
+        assert "error_message" in webhook_cols
 
         # 2. Downgrade to base
         command.downgrade(alembic_cfg, "base")

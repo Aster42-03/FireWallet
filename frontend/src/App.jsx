@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Smartphone, LayoutGrid, Sparkles } from 'lucide-react';
 import MobileHUD from './features/hud/MobileHUD';
 import QuickIntentModal from './features/intent/QuickIntentModal';
 import EscapeWindowModal from './features/override/EscapeWindowModal';
-import {CoachDrawer} from './features/coach/CoachDrawer';
+import { CoachDrawer } from './features/coach/CoachDrawer';
 import DeepLedgerGrid from './features/analytics/DeepLedgerGrid';
 import { fetchBuckets, fetchStatsSummary } from './shared/api';
 
@@ -17,6 +17,7 @@ export default function App() {
     { kind: 'bills', name: 'Bills', available: 120000 }
   ]);
   const [stats, setStats] = useState(null);
+  const [ledgerRefreshTick, setLedgerRefreshTick] = useState(0);
 
   // Modals state
   const [isIntentOpen, setIsIntentOpen] = useState(false);
@@ -29,32 +30,46 @@ export default function App() {
   const [coachChartContext, setCoachChartContext] = useState(null);
   const [coachFilterContext, setCoachFilterContext] = useState(null);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const bRes = await fetchBuckets();
       if (bRes.buckets) setBuckets(bRes.buckets);
       const sRes = await fetchStatsSummary();
       setStats(sRes);
+      setLedgerRefreshTick(t => t + 1);
     } catch (err) {
       console.warn('API running offline or starting up, using cached state.');
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
-  const handleOpenCoachWithQuery = (query, chartId = null, filterContext = null) => {
-    setCoachInitialQuery(query);
+  const handleOpenCoachWithQuery = useCallback((query, chartId = null, filterContext = null) => {
+    if (!query) {
+      setIsCoachOpen(true);
+      return;
+    }
+    setCoachInitialQuery({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      text: query,
+      chartId,
+      filterContext
+    });
     setCoachChartContext(chartId);
     setCoachFilterContext(filterContext);
     setIsCoachOpen(true);
-  };
+  }, []);
 
-  const handleOpenOverride = (intentId) => {
+  const handleClearInitialQuery = useCallback(() => {
+    setCoachInitialQuery(null);
+  }, []);
+
+  const handleOpenOverride = useCallback((intentId) => {
     setActiveOverrideIntentId(intentId);
     setIsOverrideOpen(true);
-  };
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#090d16] text-slate-100 flex flex-col font-sans">
@@ -132,6 +147,7 @@ export default function App() {
           <div className="flex flex-col lg:flex-row flex-1 min-h-[calc(100vh-61px)]">
             <div className="flex-1 min-w-0">
               <DeepLedgerGrid
+                refreshTrigger={ledgerRefreshTick}
                 onAnalyzeWithCoach={(query, filterCtx) => {
                   handleOpenCoachWithQuery(query, null, filterCtx);
                 }}
@@ -146,10 +162,13 @@ export default function App() {
                 isOpen={isCoachOpen}
                 onClose={() => setIsCoachOpen(false)}
                 initialQuery={coachInitialQuery}
+                onClearInitialQuery={handleClearInitialQuery}
                 chartContext={coachChartContext}
                 filterContext={coachFilterContext}
                 mode="sidebar"
-                onSelectSuggestIntent={(suggestion) => {
+                onOpenOverride={handleOpenOverride}
+                onActionSuccess={loadData}
+                onSelectSuggestIntent={() => {
                   setIsIntentOpen(true);
                 }}
               />
@@ -163,6 +182,7 @@ export default function App() {
         isOpen={isIntentOpen}
         onClose={() => setIsIntentOpen(false)}
         onOpenOverride={handleOpenOverride}
+        onAskCoach={(q) => handleOpenCoachWithQuery(q)}
         onSuccess={loadData}
       />
 
@@ -179,10 +199,13 @@ export default function App() {
           isOpen={isCoachOpen}
           onClose={() => setIsCoachOpen(false)}
           initialQuery={coachInitialQuery}
+          onClearInitialQuery={handleClearInitialQuery}
           chartContext={coachChartContext}
           filterContext={coachFilterContext}
           mode="drawer"
-          onSelectSuggestIntent={(suggestion) => {
+          onOpenOverride={handleOpenOverride}
+          onActionSuccess={loadData}
+          onSelectSuggestIntent={() => {
             setIsIntentOpen(true);
           }}
         />

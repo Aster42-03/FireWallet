@@ -1,14 +1,10 @@
 """
 Financial Spend Intent Classifier & Parsing Gateway
 ===================================================
-Natural Language Processing (NLP) agent that intercepts prospective user spending
-intents, classifying them into structured categories, necessity buckets, and policy rationale
-prior to evaluating Trinity firewall rules or calling PayPal payment APIs.
-
-Key Responsibilities:
-1. Ingests natural language spend descriptions (e.g. "Trader Joe's groceries $24").
-2. Maps utterance into category, necessity ('bill', 'daily_living', 'freedom'), and recommended bucket.
-3. Audits full model latency and raw token responses in the AgentRun database table.
+Single-call Natural Language Processing (NLP) gateway that intercepts prospective
+user spending intents, distilling a concise 2-5 word `short_tag` (e.g., 'groceries',
+'takeout', 'gift for family') and classifying category, necessity, recommended Trinity
+bucket, and genuine emergency status prior to deterministic firewall evaluation.
 """
 
 import json
@@ -16,9 +12,12 @@ import time
 from typing import Any, Dict, Optional
 from uuid import UUID
 
-from app.agents.shared.llm_client import llm_client
-from app.models.intent import AgentRun
 from sqlmodel.ext.asyncio.session import AsyncSession
+
+from app.agents.shared.llm_client import llm_client
+from app.agents.rag import normalize_short_tag, is_genuine_emergency
+from app.models.intent import AgentRun
+
 
 async def parse_intent_utterance(
     session: AsyncSession,
@@ -29,24 +28,8 @@ async def parse_intent_utterance(
     balances_snapshot: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     """
-    Parses a natural language spend intent into a structured classification payload.
-    
-    Args:
-        session: Active AsyncSession for recording the AgentRun audit log.
-        intent_id: UUID of the parent Intent record.
-        utterance: User's raw natural language description.
-        amount_minor: Proposed transaction amount in minor units (cents).
-        merchant_name: Optional merchant name.
-        balances_snapshot: Optional snapshot of current available bucket balances.
-        
-    Returns:
-        Dict with keys:
-            category: str (e.g. 'groceries', 'transit', 'entertainment')
-            necessity: str ('bill', 'daily_living', 'freedom', 'ambiguous')
-            recommended_bucket: str ('bills', 'daily', 'freedom', 'bank', 'none')
-            confidence: float (0.0 to 1.0)
-            rationale: str (User-facing explanation sentence)
-            flags: List[str]
+    Parses a natural language spend intent into a structured classification payload
+    in a single ultra-fast LLM call (Groq `llama-3.3-70b-versatile` -> `gpt-4o-mini` -> local fallback).
     """
     start_time = time.time()
     prompt = (
@@ -54,41 +37,61 @@ async def parse_intent_utterance(
         f"Utterance: '{utterance}'\n"
         f"Amount: ${amount_minor / 100:.2f}\n"
         f"Merchant: '{merchant_name}'\n\n"
-        f"Return strict JSON with keys: category, necessity (bill, daily_living, freedom, ambiguous), "
-        f"recommended_bucket (bills, daily, freedom, bank, none), confidence (0.0-1.0), "
-        f"rationale (one clear user-facing sentence), and flags (list of strings)."
+        f"Return strict JSON with keys:\n"
+        f"- short_tag: concise 2-5 word lowercase summary phrase (e.g. 'groceries', 'takeout', 'gift for family', 'movie ticket')\n"
+        f"- category: string (e.g. 'groceries', 'transit', 'eating_out', 'entertainment', 'utilities', 'gifts', 'emergency')\n"
+        f"- necessity: one of ('bill', 'daily_living', 'freedom', 'ambiguous')\n"
+        f"- recommended_bucket: one of ('bills', 'daily', 'freedom', 'bank', 'vault')\n"
+        f"- is_emergency: boolean (true ONLY for genuine medical/ER/hospital/stranded/shutoff emergencies, NOT celebrations)\n"
+        f"- confidence: float (0.0-1.0)\n"
+        f"- rationale: one clear user-facing sentence\n"
+        f"- flags: list of strings"
     )
 
     messages = [
         {"role": "system", "content": "You are a precise financial intent classifier. Output JSON only."},
-        {"role": "user", "content": prompt}
+        {"role": "user", "content": prompt},
     ]
 
-    # Query LLM in strict JSON output mode
     raw_response = await llm_client.chat_completion(messages, temperature=0.1, json_mode=True)
     latency_ms = int((time.time() - start_time) * 1000)
 
     try:
         parsed = json.loads(raw_response)
+        if not isinstance(parsed, dict):
+            raise ValueError("Expected JSON object")
     except Exception:
-        # Graceful fallback if model output fails JSON parsing
         parsed = {
             "category": "other",
             "necessity": "freedom",
             "recommended_bucket": "freedom",
             "confidence": 0.5,
             "rationale": "Discretionary spend defaults to Freedom envelope.",
-            "flags": ["parse_fallback"]
+            "flags": ["parse_fallback"],
         }
 
-    # Record full diagnostic audit trail in agent_runs table
+    # Deterministic post-processing guardrails on short_tag & emergency verification
+    category = str(parsed.get("category") or "other")
+    parsed["short_tag"] = normalize_short_tag(
+        parsed.get("short_tag"),
+        fallback_utterance=utterance,
+        category=category,
+        merchant_name=merchant_name,
+    )
+    det_emerg, emerg_reason = is_genuine_emergency(utterance, merchant_name, category)
+    parsed["is_emergency"] = det_emerg
+    if det_emerg and "valid_emergency" not in parsed.get("flags", []):
+        parsed["flags"] = list(parsed.get("flags") or []) + ["valid_emergency"]
+        parsed["rationale"] = parsed.get("rationale") or emerg_reason
+
     agent_run = AgentRun(
         kind="intent",
         intent_id=intent_id,
         model=llm_client.model,
+        prompt_version="v3-rag-monolithic",
         latency_ms=latency_ms,
         raw_response=raw_response,
-        parsed=json.dumps(parsed)
+        parsed=json.dumps(parsed),
     )
     session.add(agent_run)
     await session.commit()

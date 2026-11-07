@@ -11,7 +11,10 @@ from app.schemas.common import PolicyUpdate
 router = APIRouter(tags=["Auth & Policy"])
 
 async def get_current_user(session: AsyncSession = Depends(get_session)) -> User:
-    """Retrieve demo user (or create default on the fly if needed)."""
+    """
+    Retrieve demo user (or create default on the fly if needed).
+    Ensures the 5 fundamental Trinity buckets exist for the user.
+    """
     stmt = select(User).limit(1)
     result = await session.exec(stmt)
     user = result.first()
@@ -35,6 +38,24 @@ async def get_current_user(session: AsyncSession = Depends(get_session)) -> User
         )
         session.add(policy)
         await session.commit()
+
+    # Fail-safe check: guarantee user has the 5 core Trinity buckets
+    from app.models.bucket import Bucket
+    b_stmt = select(Bucket).where(Bucket.user_id == user.id)
+    existing_buckets = (await session.exec(b_stmt)).all()
+    if not existing_buckets:
+        bucket_defs = [
+            ("bank", "Bank Foundation"),
+            ("daily", "Daily Allowance"),
+            ("freedom", "Freedom Envelope"),
+            ("vault", "Locked Savings Vault"),
+            ("bills", "Reserved Bills")
+        ]
+        for kind, name in bucket_defs:
+            b = Bucket(user_id=user.id, kind=kind, name=name)
+            session.add(b)
+        await session.commit()
+
     return user
 
 @router.get("/me")

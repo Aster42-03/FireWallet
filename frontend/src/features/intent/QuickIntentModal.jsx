@@ -1,12 +1,29 @@
 import React, { useState } from 'react';
-import { X, ShieldCheck, ShieldAlert, Lock, ArrowRight, Loader2, ExternalLink } from 'lucide-react';
+import {
+  X,
+  ShieldCheck,
+  ShieldAlert,
+  Lock,
+  ArrowRight,
+  Loader2,
+  ExternalLink,
+  Tag,
+  Sparkles,
+  Zap
+} from 'lucide-react';
 import { submitIntent, executeIntent, captureIntent } from '../../shared/api';
 
-export default function QuickIntentModal({ isOpen, onClose, onOpenOverride, onSuccess }) {
+export default function QuickIntentModal({
+  isOpen,
+  onClose,
+  onOpenOverride,
+  onAskCoach,
+  onSuccess
+}) {
   const [amountStr, setAmountStr] = useState('24.00');
-  const [utterance, setUtterance] = useState('Buying groceries at Trader Joe\'s');
-  const [merchant, setMerchant] = useState('Trader Joe\'s');
-  
+  const [utterance, setUtterance] = useState("Buying groceries at Trader Joe's");
+  const [merchant, setMerchant] = useState("Trader Joe's");
+
   const [loading, setLoading] = useState(false);
   const [executing, setExecuting] = useState(false);
   const [verdict, setVerdict] = useState(null);
@@ -39,13 +56,19 @@ export default function QuickIntentModal({ isOpen, onClose, onOpenOverride, onSu
     try {
       const execRes = await executeIntent(verdict.id);
       
-      // Simulate/Trigger PayPal approval window
-      const approvalUrl = execRes.approval_url || `https://www.sandbox.paypal.com/checkoutnow?token=${execRes.paypal_order_id}`;
-      
-      // In sandbox demo, settle order
+      // If a real approval URL is returned, open it for user authorization
+      if (execRes.approval_url && !execRes.approval_url.includes('ORDER-MOCK')) {
+        window.open(execRes.approval_url, '_blank', 'noopener,noreferrer');
+      }
+
       await captureIntent(verdict.id, execRes.paypal_order_id);
-      
-      alert(`PayPal Sandbox Payment Captured Successfully!\nOrder ID: ${execRes.paypal_order_id}\nBucket Settled: ${verdict.source_bucket}`);
+
+      alert(
+        `PayPal Sandbox Payment Captured Successfully!\n\n` +
+        `• PayPal Order ID: ${execRes.paypal_order_id}\n` +
+        `• Bucket Debited: ${verdict.source_bucket.toUpperCase()}\n` +
+        `• Tag: #${verdict.short_tag || verdict.category}`
+      );
       onSuccess?.();
       onClose();
     } catch (err) {
@@ -54,6 +77,9 @@ export default function QuickIntentModal({ isOpen, onClose, onOpenOverride, onSu
       setExecuting(false);
     }
   };
+
+  const isAccepted = verdict?.verdict === 'accepted' || verdict?.status === 'allowed';
+  const isRejected = verdict?.verdict === 'rejected' || verdict?.status === 'denied';
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
@@ -111,7 +137,7 @@ export default function QuickIntentModal({ isOpen, onClose, onOpenOverride, onSu
                 value={utterance}
                 onChange={(e) => setUtterance(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors resize-none"
-                placeholder="e.g. Buying groceries vs Ordering late-night takeout..."
+                placeholder="e.g. Buying groceries, takeout, gift for family, or urgent ER visit..."
               />
             </div>
 
@@ -125,7 +151,7 @@ export default function QuickIntentModal({ isOpen, onClose, onOpenOverride, onSu
                 value={merchant}
                 onChange={(e) => setMerchant(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
-                placeholder="e.g. Safeway, DoorDash, Landlord"
+                placeholder="e.g. Safeway, DoorDash, City Hospital"
               />
             </div>
 
@@ -138,11 +164,11 @@ export default function QuickIntentModal({ isOpen, onClose, onOpenOverride, onSu
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Intent Agent Parsing...</span>
+                  <span>Unified Agent Validating...</span>
                 </>
               ) : (
                 <>
-                  <span>Check with Firewall</span>
+                  <span>Validate Quick Intent</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}
@@ -151,28 +177,61 @@ export default function QuickIntentModal({ isOpen, onClose, onOpenOverride, onSu
         ) : (
           /* Verdict View */
           <div className="space-y-4 mt-4 animate-in fade-in">
-            <div className={`p-4 rounded-xl border ${verdict.status === 'allowed' ? 'bg-emerald-950/40 border-emerald-800' : 'bg-rose-950/40 border-rose-800'}`}>
-              <div className="flex items-center gap-2">
-                {verdict.status === 'allowed' ? (
-                  <ShieldCheck className="w-5 h-5 text-emerald-400" />
-                ) : (
-                  <ShieldAlert className="w-5 h-5 text-rose-400" />
+            <div
+              className={`p-4 rounded-xl border ${
+                isAccepted
+                  ? 'bg-emerald-950/40 border-emerald-800'
+                  : isRejected
+                  ? 'bg-rose-950/50 border-rose-800'
+                  : 'bg-amber-950/40 border-amber-800'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  {isAccepted ? (
+                    <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                  ) : (
+                    <ShieldAlert className={`w-5 h-5 ${isRejected ? 'text-rose-400' : 'text-amber-400'}`} />
+                  )}
+                  <span
+                    className={`text-sm font-bold uppercase tracking-wider ${
+                      isAccepted
+                        ? 'text-emerald-300'
+                        : isRejected
+                        ? 'text-rose-300'
+                        : 'text-amber-300'
+                    }`}
+                  >
+                    {isAccepted
+                      ? 'Intent Accepted'
+                      : isRejected
+                      ? 'Intent Rejected'
+                      : 'Refer to Coach / Override'}
+                  </span>
+                </div>
+
+                {verdict.short_tag && (
+                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-800 text-[11px] font-semibold">
+                    <Tag className="w-3 h-3 text-indigo-400" />#{verdict.short_tag}
+                  </span>
                 )}
-                <span className={`text-sm font-bold uppercase tracking-wider ${verdict.status === 'allowed' ? 'text-emerald-300' : 'text-rose-300'}`}>
-                  {verdict.status === 'allowed' ? 'Intent Authorized' : 'Blocked by Firewall'}
-                </span>
               </div>
 
-              <p className="text-xs text-slate-300 mt-2 leading-relaxed">
-                {verdict.rationale}
-              </p>
+              <p className="text-xs text-slate-300 mt-2 leading-relaxed">{verdict.rationale}</p>
+
+              {verdict.is_emergency && (
+                <div className="mt-2.5 px-2.5 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-300 flex items-center gap-1.5 font-semibold">
+                  <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <span>Genuine emergency detected — 0-second zero-delay unlock eligible!</span>
+                </div>
+              )}
 
               <div className="mt-3 pt-3 border-t border-slate-800/80 flex flex-wrap gap-2 text-xs">
-                <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+                <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 capitalize">
                   Category: <strong>{verdict.category}</strong>
                 </span>
-                <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">
-                  Target: <strong>{verdict.source_bucket}</strong>
+                <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 capitalize">
+                  Bucket: <strong>{verdict.source_bucket}</strong>
                 </span>
                 <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">
                   Confidence: <strong>{Math.round((verdict.confidence || 0.95) * 100)}%</strong>
@@ -180,7 +239,7 @@ export default function QuickIntentModal({ isOpen, onClose, onOpenOverride, onSu
               </div>
             </div>
 
-            {verdict.status === 'allowed' ? (
+            {isAccepted ? (
               <button
                 onClick={handleExecutePayPal}
                 disabled={executing}
@@ -193,26 +252,55 @@ export default function QuickIntentModal({ isOpen, onClose, onOpenOverride, onSu
                   </>
                 ) : (
                   <>
-                    <span>Pay with PayPal Sandbox</span>
+                    <span>{verdict.action_card?.label || 'Pay with PayPal Sandbox'}</span>
                     <ExternalLink className="w-4 h-4" />
                   </>
                 )}
               </button>
             ) : (
-              <div className="space-y-2">
-                <button
-                  onClick={() => {
-                    onClose();
-                    onOpenOverride?.(verdict.id);
-                  }}
-                  className="w-full py-3 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg transition-colors"
-                >
-                  <Lock className="w-4 h-4" />
-                  <span>Open Escape Window (Override)</span>
-                </button>
-                <p className="text-[11px] text-center text-slate-400">
-                  Friction is required: 200-character confession + 3-minute cooldown.
-                </p>
+              <div className="space-y-2.5">
+                {/* Refer to Coach for Conversational Reasoning */}
+                {onAskCoach && (
+                  <button
+                    onClick={() => {
+                      const q = `Help me reason through spending $${parseFloat(amountStr || '0').toFixed(2)} for "${utterance}" (${verdict.short_tag || verdict.category}).`;
+                      onClose();
+                      onAskCoach(q);
+                    }}
+                    className="w-full py-3 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg transition-colors"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    <span>Reason with Trinity Coach</span>
+                  </button>
+                )}
+
+                {!isRejected && (
+                  <>
+                    <button
+                      onClick={() => {
+                        onClose();
+                        onOpenOverride?.(verdict.id);
+                      }}
+                      className={`w-full py-3 font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg transition-colors ${
+                        verdict.is_emergency
+                          ? 'bg-amber-500 hover:bg-amber-400 text-slate-950'
+                          : 'bg-rose-600 hover:bg-rose-500 text-white'
+                      }`}
+                    >
+                      {verdict.is_emergency ? <Zap className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+                      <span>
+                        {verdict.is_emergency
+                          ? 'Instant Emergency Override (0s Delay)'
+                          : 'Open Escape Window (Override)'}
+                      </span>
+                    </button>
+                    <p className="text-[11px] text-center text-slate-400">
+                      {verdict.is_emergency
+                        ? 'Valid emergencies bypass the 200-char wall & 3-minute cooldown.'
+                        : 'Non-emergency splurges require a 200-character reflection + 3-minute cooldown.'}
+                    </p>
+                  </>
+                )}
               </div>
             )}
 

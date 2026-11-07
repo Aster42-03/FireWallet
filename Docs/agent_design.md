@@ -1,39 +1,69 @@
-# Agent design & Four-stage pipeline
+# Agent design: Monolithic Single-Call Architecture & Deterministic Guardrails
 
-FireWallet pairs proactive spending control with reactive financial literacy. The system is structured into a **four-stage pipeline** where LLM agents are strictly isolated from deterministic financial execution.
+FireWallet pairs proactive spending control with reactive financial literacy. For production reliability and hackathon performance, FireWallet avoids fragile multi-agent frameworks (which multiply latency and failure points) and instead uses a **monolithic single-call agent with structured outputs** (powered by Groq `llama-3.3-70b-versatile` or OpenAI `gpt-4o-mini`) strictly paired with **deterministic Python guardrails** (`LedgerEngine`).
 
 Related: [architecture.md](architecture.md), [insights.md](insights.md), [trinity_logic.md](trinity_logic.md), [paypal_integration.md](paypal_integration.md).
 
 ```mermaid
 flowchart LR
-  subgraph Stage 1: Control
-    IntentAgent[1. Intent Agent<br/><i>LLM Structured Parse</i>]
+  subgraph Stage 1: The Brain (Single LLM Call)
+    Agent[Monolithic Agent<br/><i>Groq Llama 3.3 70B / OpenAI</i><br/>Structured Output: CoachDecision]
   end
 
-  subgraph Stage 2: Invariants
-    PolicyEngine[2. Policy Engine<br/><i>Deterministic can_spend</i>]
-    LedgerHold[Ledger HOLD<br/><i>PostgreSQL Lock</i>]
+  subgraph Stage 2: Invariants (Deterministic Python)
+    PolicyEngine[Policy Engine & Guardrails<br/><i>can_spend & Emergency Detector</i>]
+    LedgerHold[Ledger HOLD / Transfer<br/><i>SQLModel Lock</i>]
   end
 
-  subgraph Stage 3: Execution
-    PayPalClient[3. PayPal Executor<br/><i>Orders & Payouts Sandbox</i>]
-    WebhookReconcile[Webhook Reconcile<br/><i>Settled Ledger Post</i>]
+  subgraph Stage 3: User Confirmation
+    ActionCard[1-Tap Action Card<br/><i>[Pay $24 with PayPal]</i><br/><i>[Instant Emergency Unlock]</i>]
   end
 
-  subgraph Stage 4: Literacy
-    InsightsCoach[4. Insights Coach<br/><i>LLM Reactive Chat</i>]
-    AnalyticsLayer[Analytics Read Models<br/><i>Deterministic Aggregates</i>]
+  subgraph Stage 4: Execution & Settlement
+    PayPalClient[PayPal Executor<br/><i>Orders v2 & Payouts Sandbox</i>]
+    WebhookReconcile[Webhook Router<br/><i>Status: pending -> processed</i>]
   end
 
-  IntentAgent -->|Parsed Intent| PolicyEngine
+  Agent -->|CoachDecision + ActionCard| ActionCard
+  ActionCard -->|1-Click User Confirmation| PolicyEngine
   PolicyEngine -->|Authorized| LedgerHold
   LedgerHold -->|Active Hold| PayPalClient
   PayPalClient -->|Payment Capture| WebhookReconcile
-
-  InsightsCoach <-->|Read-only Tools| AnalyticsLayer
-  AnalyticsLayer -.->|Reads Ledger| LedgerHold
-  InsightsCoach -.->|Deep Link /intent| IntentAgent
 ```
+
+---
+
+## 1. The Monolithic Agent (`CoachDecision`)
+
+Instead of multiple LLM agents chatting with each other, a single LLM call handles both the **Voice** (conversational text) and the **Brain** (action decision and structured metadata).
+
+### Schema (`CoachDecision`)
+```json
+{
+  "reply": "Everyday groceries fit comfortably in your Daily Allowance ($52 remaining).",
+  "status": "allowed",
+  "confidence": 0.95,
+  "rationale": "Sufficient Daily Living balance.",
+  "target_bucket": "daily",
+  "is_emergency": false,
+  "cooldown_seconds": 0,
+  "action_card": {
+    "action_type": "paypal_checkout",
+    "title": "Pay $24.00 with PayPal",
+    "amount_cents": 2400,
+    "target_bucket": "daily"
+  }
+}
+```
+
+### Emergency Override Detection (Zero-Cooldown Rule)
+When evaluating Escape Window overrides (`POST /api/v1/overrides`):
+- **Valid Emergency** (e.g. medical copay, urgent car repair, critical utility):
+  - `is_emergency = true`
+  - `cooldown_seconds = 0` $\rightarrow$ **Immediate unlock without delay!**
+- **Non-Emergency Splurge** (e.g. takeout, concert tickets, impulse luxury):
+  - `is_emergency = false`
+  - `cooldown_seconds = 180` $\rightarrow$ **Enforces standard 180s cooldown timer + 200-char confession**.
 
 ---
 

@@ -179,22 +179,34 @@ export default function MobileHUD({
 
         <div className="flex gap-2 mt-2.5 overflow-x-auto pb-1 scrollbar-none">
           <button
-            onClick={() => onOpenCoach('Can I afford a $20 movie ticket tonight?')}
-            className="text-xs px-3 py-1.5 bg-slate-800/70 hover:bg-slate-800 border border-slate-700/60 rounded-full text-slate-300 whitespace-nowrap transition-colors"
+            onClick={() => onOpenCoach('Explain how my rollover streak works and how unspent Daily funds roll over.')}
+            className="text-xs px-3 py-1.5 bg-slate-800/70 hover:bg-slate-800 border border-slate-700/60 rounded-full text-slate-300 whitespace-nowrap transition-colors flex items-center gap-1 shrink-0"
           >
-            🎬 Can I afford a $20 movie?
+            <span>✦ Explain rollover streak</span>
           </button>
           <button
-            onClick={() => onOpenCoach('Why is my Bank bucket locked?')}
-            className="text-xs px-3 py-1.5 bg-slate-800/70 hover:bg-slate-800 border border-slate-700/60 rounded-full text-slate-300 whitespace-nowrap transition-colors"
+            onClick={() => onOpenCoach('Why is my Bank Foundation bucket locked by default and how does it protect my bills?')}
+            className="text-xs px-3 py-1.5 bg-slate-800/70 hover:bg-slate-800 border border-slate-700/60 rounded-full text-slate-300 whitespace-nowrap transition-colors flex items-center gap-1 shrink-0"
           >
-            🔒 Why is Bank locked?
+            <span>🔒 Why is Bank locked?</span>
           </button>
           <button
-            onClick={() => onOpenCoach('What does my rollover streak mean?')}
-            className="text-xs px-3 py-1.5 bg-slate-800/70 hover:bg-slate-800 border border-slate-700/60 rounded-full text-slate-300 whitespace-nowrap transition-colors"
+            onClick={() => onOpenCoach('How does the zero-sum Vault sweep work to automatically build my long-term savings?')}
+            className="text-xs px-3 py-1.5 bg-slate-800/70 hover:bg-slate-800 border border-slate-700/60 rounded-full text-slate-300 whitespace-nowrap transition-colors flex items-center gap-1 shrink-0"
           >
-            ✦ Explain rollover streak
+            <span>⚡ How Vault sweep works</span>
+          </button>
+          <button
+            onClick={() => onOpenCoach('Diagnose my daily burn velocity and financial runway across all Trinity buckets.')}
+            className="text-xs px-3 py-1.5 bg-slate-800/70 hover:bg-slate-800 border border-slate-700/60 rounded-full text-slate-300 whitespace-nowrap transition-colors flex items-center gap-1 shrink-0"
+          >
+            <span>📊 Diagnose spend velocity</span>
+          </button>
+          <button
+            onClick={() => onOpenCoach('How does the emergency Escape Window work if I need emergency funds from Bank?')}
+            className="text-xs px-3 py-1.5 bg-slate-800/70 hover:bg-slate-800 border border-slate-700/60 rounded-full text-slate-300 whitespace-nowrap transition-colors flex items-center gap-1 shrink-0"
+          >
+            <span>🔥 Escape Window friction</span>
           </button>
         </div>
       </div>
