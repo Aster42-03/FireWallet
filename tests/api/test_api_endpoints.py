@@ -45,13 +45,25 @@ async def test_get_hud_summary(client: httpx.AsyncClient):
 @pytest.mark.api
 async def test_get_deep_ledger_for_ag_grid(client: httpx.AsyncClient):
     """Verify Desktop AG Grid foundational data source returns rows, aggregates, and pagination."""
-    resp = await client.get("/api/v1/analytics/deep-ledger?limit=10")
+    resp = await client.get("/api/v1/analytics/deep-ledger?limit=20")
     assert resp.status_code == 200
     data = resp.json()
     assert "total_count" in data
     assert data["total_count"] >= 5
     assert "items" in data
     assert "aggregates" in data
+
+    # Verify double-entry integrity
+    assert data["aggregates"]["double_entry_balanced"] is True
+    assert "velocity_metrics" in data["aggregates"]
+    assert "daily_burn_rate" in data["aggregates"]["velocity_metrics"]
+
+    # Verify item attributes
+    first_item = data["items"][0]
+    assert "direction" in first_item
+    assert "entry_kind" in first_item
+    assert "running_balance" in first_item
+    assert "counterparty_bucket" in first_item
 
     # Test filtering by bucket
     resp_filtered = await client.get("/api/v1/analytics/deep-ledger?bucket=daily")
@@ -148,3 +160,24 @@ async def test_coach_message_endpoint(client: httpx.AsyncClient):
     assert "citations" in data
     assert data["suggest_intent"] is not None
     assert data["suggest_intent"]["amount"] == 1500
+
+@pytest.mark.api
+async def test_coach_deep_ledger_interrogation(client: httpx.AsyncClient):
+    """Verify Coach accepts active AG Grid filter context and returns double-entry analysis."""
+    resp = await client.post("/api/v1/coach/messages", json={
+        "utterance": "Analyze my filtered ledger transactions and tell me my velocity and double-entry health.",
+        "filter_context": {
+            "bucket": "daily",
+            "state": "posted",
+            "selected_rows": [
+                {"utterance": "Trader Joe's groceries", "amount": -4400, "bucket": "daily"}
+            ]
+        }
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "reply" in data
+    assert "Double-Entry" in data["reply"] or "Ledger" in data["reply"]
+    assert "citations" in data
+    assert "deep_ledger" in data["citations"]
+    assert data["citations"]["deep_ledger"]["zero_sum_balanced"] is True

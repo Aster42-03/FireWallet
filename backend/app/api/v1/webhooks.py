@@ -19,9 +19,6 @@ async def handle_paypal_webhook(
     request: Request,
     session: AsyncSession = Depends(get_session)
 ):
-    """
-    Public webhook receiver with cryptographic signature verification and idempotency check.
-    """
     raw_body = await request.body()
     headers = dict(request.headers)
 
@@ -39,40 +36,56 @@ async def handle_paypal_webhook(
     event_id = event_data.get("id")
     event_type = event_data.get("event_type", "UNKNOWN")
 
-    # 2. Idempotency Check
-    stmt = select(PayPalWebhookEvent).where(PayPalWebhookEvent.event_id == event_id)
+    # 2. Idempotency Check (Check if already successfully processed)
+    stmt = select(PayPalWebhookEvent).where(
+        PayPalWebhookEvent.event_id == event_id,
+        PayPalWebhookEvent.status == "processed"  # Only ignore if previously SUCCESSFUL
+    )
     res = await session.exec(stmt)
     if res.first():
-        logger.info(f"Duplicate webhook event {event_id} ignored.")
+        logger.info(f"Duplicate webhook event {event_id} already processed. Ignored.")
         return {"status": "duplicate_ignored", "event_id": event_id}
 
-    # Record event
-    webhook_log = PayPalWebhookEvent(
-        event_id=event_id,
-        event_type=event_type,
-        payload_json=raw_body.decode("utf-8")
-    )
-    session.add(webhook_log)
-    await session.commit()
+    # Record or fetch event log
+    stmt_existing = select(PayPalWebhookEvent).where(PayPalWebhookEvent.event_id == event_id)
+    existing_log = (await session.exec(stmt_existing)).first()
 
-    # 3. Route specific event types
+    if not existing_log:
+        webhook_log = PayPalWebhookEvent(
+            event_id=event_id,
+            event_type=event_type,
+            payload_json=raw_body.decode("utf-8"),
+            status="pending"
+        )
+        session.add(webhook_log)
+    else:
+        webhook_log = existing_log
+
+    # 3. Route specific event types inside a safe block
     resource = event_data.get("resource", {})
-    if event_type == "PAYMENT.CAPTURE.COMPLETED":
-        capture_id = resource.get("id")
-        custom_id = resource.get("custom_id")
-        if custom_id:
-            try:
+    try:
+        if event_type == "PAYMENT.CAPTURE.COMPLETED":
+            capture_id = resource.get("id")
+            custom_id = resource.get("custom_id")
+            if custom_id:
                 intent_uuid = UUID(custom_id)
                 stmt_i = select(Intent).where(Intent.id == intent_uuid)
-                res_i = await session.exec(stmt_i)
-                intent = res_i.first()
+                intent = (await session.exec(stmt_i)).first()
                 if intent:
                     await LedgerEngine.settle_hold(session, intent.id, capture_id)
                     intent.status = "settled"
                     session.add(intent)
-                    await session.commit()
-                    logger.info(f"Settled intent {intent_uuid} via capture {capture_id}")
-            except Exception as e:
-                logger.error(f"Error settling intent from webhook: {e}")
+
+        # Mark event as successfully processed
+        webhook_log.status = "processed"
+        session.add(webhook_log)
+        await session.commit()
+        logger.info(f"Successfully processed webhook event {event_id} ({event_type})")
+
+    except Exception as e:
+        await session.rollback()
+        logger.error(f"Error processing webhook event {event_id}: {e}")
+        # Return 500 so PayPal knows to retry the webhook later!
+        return Response(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content=str(e))
 
     return {"ok": True, "event_id": event_id, "event_type": event_type}

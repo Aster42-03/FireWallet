@@ -13,6 +13,13 @@ class LedgerEntryBase(SQLModel):
     amount: int = Field(index=True, description="Signed minor units (+ credit, - debit)")
     currency: str = Field(default="USD", max_length=3)
     state: str = Field(default="posted", index=True, description="'hold', 'posted', 'released'")
+    entry_kind: str = Field(
+        default="standard",
+        index=True,
+        description="'payday_inflow', 'vault_skim', 'bill_reserve', 'morning_topup', 'freedom_allocation', 'merchant_spend', 'override_raid'"
+    )
+    counterparty_bucket: Optional[str] = Field(default=None, description="Paired bucket kind or external counterparty")
+    memo: Optional[str] = Field(default=None, description="Audit memo for internal transfers and allocations")
     paypal_order_id: Optional[str] = Field(default=None, index=True)
     paypal_capture_id: Optional[str] = Field(default=None, index=True)
     paypal_payout_item_id: Optional[str] = Field(default=None, index=True)

@@ -185,3 +185,30 @@ async def test_hold_lifecycle(seeded_session: AsyncSession):
     assert bal_after["daily"]["held"] == 0
     assert bal_after["daily"]["posted"] == 3200
     assert bal_after["daily"]["available"] == 3200
+
+@pytest.mark.unit
+async def test_record_double_entry_transfer_zero_sum(seeded_session: AsyncSession):
+    """Verify record_double_entry_transfer produces balanced debit/credit legs summing to 0."""
+    user = (await seeded_session.exec(select(User))).first()
+    stmt_b = select(Bucket).where(Bucket.user_id == user.id)
+    buckets = {b.kind: b for b in (await seeded_session.exec(stmt_b)).all()}
+
+    # Transfer $50.00 (5000 cents) from Bank to Daily
+    debit_leg, credit_leg = await LedgerEngine.record_double_entry_transfer(
+        session=seeded_session,
+        user_id=user.id,
+        from_bucket_id=buckets["bank"].id,
+        to_bucket_id=buckets["daily"].id,
+        amount_minor=5000,
+        entry_kind="morning_topup",
+        memo="Midday rollover topup",
+        from_bucket_kind="bank",
+        to_bucket_kind="daily"
+    )
+
+    assert debit_leg.transfer_id == credit_leg.transfer_id
+    assert debit_leg.amount == -5000
+    assert credit_leg.amount == 5000
+    assert debit_leg.amount + credit_leg.amount == 0  # Zero-sum invariant
+    assert debit_leg.counterparty_bucket == "daily"
+    assert credit_leg.counterparty_bucket == "bank"

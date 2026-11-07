@@ -38,7 +38,7 @@ async def create_override(
     # Gate 1: Mandatory Confession Length Check
     if len(body.body.strip()) < min_chars:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"Confession must be at least {min_chars} characters. You provided {len(body.body.strip())}."
         )
 

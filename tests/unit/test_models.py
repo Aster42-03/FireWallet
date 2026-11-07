@@ -7,7 +7,7 @@ from app.models.user import User, BudgetPolicy, UserRead, BudgetPolicyBase
 from app.models.bucket import Bucket, BucketRead
 from app.models.ledger import LedgerEntry, LedgerEntryRead
 from app.models.intent import Intent, IntentRead, Override, AgentRun
-from app.models.bill import Bill, BillRead
+from app.models.bill import Bill, BillRead, BillBase
 from app.models.coach import CoachThread, CoachMessage
 from app.models.webhook import PayPalWebhookEvent
 

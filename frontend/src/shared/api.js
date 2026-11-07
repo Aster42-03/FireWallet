@@ -1,3 +1,10 @@
+/**
+ * FireWallet Client API Service
+ * ==============================
+ * Centralized fetch client wrapping backend FastAPI v1 endpoints.
+ * Handles headers, JSON encoding, and error extraction.
+ */
+
 const API_BASE = '/api/v1';
 
 export async function fetchBuckets() {

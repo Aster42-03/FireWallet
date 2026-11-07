@@ -88,6 +88,13 @@ class DeepLedgerItem(BaseModel):
     bucket: str
     amount: int
     state: str
+    direction: Optional[str] = "DEBIT"
+    entry_kind: Optional[str] = "standard"
+    counterparty_bucket: Optional[str] = None
+    memo: Optional[str] = None
+    running_balance: Optional[int] = 0
+    is_internal_transfer: Optional[bool] = False
+    necessity: Optional[str] = None
     utterance: Optional[str] = None
     merchant: Optional[str] = None
     paypal_order_id: Optional[str] = None
