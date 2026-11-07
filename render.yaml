@@ -1,0 +1,48 @@
+services:
+  # 1. Backend Web Service (FastAPI)
+  - type: web
+    name: firewallet-api
+    env: python
+    region: oregon
+    plan: starter
+    buildCommand: "cd backend && pip install -e ."
+    startCommand: "cd backend && alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: firewallet-db
+          property: connectionString
+      - key: PAYPAL_ENV
+        value: sandbox
+      - key: PAYPAL_BASE_URL
+        value: https://api-m.sandbox.paypal.com
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: PAYPAL_WEBHOOK_ID
+        sync: false
+      - key: LLM_API_KEY
+        sync: false
+      - key: LLM_BASE_URL
+        value: https://api.openai.com/v1
+      - key: LLM_MODEL
+        value: gpt-4o-mini
+
+  # 2. Frontend Static Site (React + Tailwind + AG Grid)
+  - type: static
+    name: firewallet-web
+    buildCommand: "cd frontend && npm install && npm run build"
+    staticPublishPath: "frontend/dist"
+    envVars:
+      - key: VITE_API_BASE
+        fromService:
+          type: web
+          name: firewallet-api
+          property: host
+
+databases:
+  # 3. Managed PostgreSQL Database
+  - name: firewallet-db
+    plan: starter
+    region: oregon

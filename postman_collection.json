@@ -1,0 +1,409 @@
+{
+  "info": {
+    "_postman_id": "7ec2c1f0-813b-45f7-8a18-1e7ff43a604b",
+    "name": "FireWallet API (PayPal AI Hackathon)",
+    "description": "Complete smoke-test and contract verification collection for FireWallet's proactive financial firewall, Trinity bucket engine, PayPal Sandbox execution, and AI Financial Coach.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "intentId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "overrideId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "paypalOrderId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "System & Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            }
+          }
+        },
+        {
+          "name": "API Root Info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/",
+              "host": ["{{baseUrl}}"],
+              "path": [""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Buckets & Policy",
+      "item": [
+        {
+          "name": "Get User Profile & Policy",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "me"]
+            }
+          }
+        },
+        {
+          "name": "Get Trinity Buckets (Bank, Daily, Freedom, Vault, Bills)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/buckets",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "buckets"]
+            }
+          }
+        },
+        {
+          "name": "Get Standard Ledger Entries",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/ledger?limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "ledger"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Intent Gateway (Proactive Firewall)",
+      "item": [
+        {
+          "name": "1. Submit Allowed Intent (Groceries $24.00)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.id) { pm.collectionVariables.set('intentId', jsonData.id); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "pm-test-intent-1"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"utterance\": \"Buying groceries at Trader Joe's\",\n  \"amount\": 2400,\n  \"currency\": \"USD\",\n  \"merchant_name\": \"Trader Joe's\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/intents",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "intents"]
+            }
+          }
+        },
+        {
+          "name": "2. Submit Denied Intent (Late-Night Sushi $35.00)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "pm-test-intent-2"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"utterance\": \"Late-night sushi delivery at 1:30 AM\",\n  \"amount\": 3500,\n  \"currency\": \"USD\",\n  \"merchant_name\": \"DoorDash\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/intents",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "intents"]
+            }
+          }
+        },
+        {
+          "name": "3. Execute Intent (Ledger Hold + PayPal Orders v2)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.paypal_order_id) { pm.collectionVariables.set('paypalOrderId', jsonData.paypal_order_id); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/intents/{{intentId}}/execute",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "intents", "{{intentId}}", "execute"]
+            }
+          }
+        },
+        {
+          "name": "4. Capture Intent (PayPal Capture + Settle Hold)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paypal_order_id\": \"{{paypalOrderId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/intents/{{intentId}}/capture",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "intents", "{{intentId}}", "capture"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Escape Window Overrides (Friction)",
+      "item": [
+        {
+          "name": "1. Submit Confession (200-char requirement)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.id) { pm.collectionVariables.set('overrideId', jsonData.id); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intent_id\": \"{{intentId}}\",\n  \"body\": \"I understand that my Freedom envelope is currently depleted for the month. I am consciously choosing to raid my Bank foundation because I have an urgent project deadline tonight and need sustenance.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/overrides",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "overrides"]
+            }
+          }
+        },
+        {
+          "name": "2. Check Cooldown Status",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/overrides/{{overrideId}}/check-cooldown",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "overrides", "{{overrideId}}", "check-cooldown"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Financial Coach (Advanced Reasoning)",
+      "item": [
+        {
+          "name": "1. Affordability Simulation Query",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"utterance\": \"Can I afford a $20 movie ticket tonight?\",\n  \"chart_id\": null,\n  \"filter_context\": null\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/coach/messages",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "coach", "messages"]
+            }
+          }
+        },
+        {
+          "name": "2. Chart Literacy Query (7-Day Category Pie)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"utterance\": \"What does this pie chart mean?\",\n  \"chart_id\": \"chart_pie_week\",\n  \"filter_context\": null\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/coach/messages",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "coach", "messages"]
+            }
+          }
+        },
+        {
+          "name": "3. AG Grid Deep Filter Interrogation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"utterance\": \"Analyze my dining-out spending velocity over the last 30 days.\",\n  \"chart_id\": null,\n  \"filter_context\": {\n    \"category\": \"eating_out\",\n    \"bucket\": \"freedom\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/coach/messages",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "coach", "messages"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Desktop Deep Analytics (AG Grid Source)",
+      "item": [
+        {
+          "name": "Get Deep Ledger Records (Multi-sort & State)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/analytics/deep-ledger?limit=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "analytics", "deep-ledger"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Detect Spending Anomalies",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/analytics/anomalies?days=30",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "analytics", "anomalies"],
+              "query": [
+                {
+                  "key": "days",
+                  "value": "30"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "PayPal Webhook Simulation",
+      "item": [
+        {
+          "name": "Simulate PAYMENT.CAPTURE.COMPLETED Webhook",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "paypal-transmission-id",
+                "value": "test-transmission-12345"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"WH-SIMULATED-CAPTURE-001\",\n  \"event_type\": \"PAYMENT.CAPTURE.COMPLETED\",\n  \"create_time\": \"2026-10-28T14:30:00Z\",\n  \"resource\": {\n    \"id\": \"CAPTURE-SIM-987654\",\n    \"custom_id\": \"{{intentId}}\",\n    \"status\": \"COMPLETED\",\n    \"amount\": {\n      \"currency_code\": \"USD\",\n      \"value\": \"24.00\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/webhooks/paypal",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "webhooks", "paypal"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,379 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "FireWallet API",
+    "description": "Proactive Financial Firewall & AI Coach powered by the Trinity Bucket Engine and PayPal Sandbox",
+    "version": "0.1.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8000",
+      "description": "Local Development Server"
+    },
+    {
+      "url": "https://firewallet-api.onrender.com",
+      "description": "Render Live Production Server"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["System"],
+        "summary": "Health Check",
+        "operationId": "health_check",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "healthy" },
+                    "service": { "type": "string", "example": "FireWallet" },
+                    "version": { "type": "string", "example": "0.1.0" },
+                    "paypal_env": { "type": "string", "example": "sandbox" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/buckets": {
+      "get": {
+        "tags": ["Buckets & Ledger"],
+        "summary": "Get Trinity Buckets",
+        "description": "Retrieve available, held, and in-flight amounts for Bank, Daily, Freedom, Vault, and Bills.",
+        "operationId": "get_buckets",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BucketsSummaryResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/intents": {
+      "post": {
+        "tags": ["Intent Firewall"],
+        "summary": "Submit Spend Intent",
+        "description": "Submits a natural language spend intent for AI categorization and deterministic rule evaluation.",
+        "operationId": "submit_intent",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IntentCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Evaluation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntentResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/intents/{intent_id}/execute": {
+      "post": {
+        "tags": ["Intent Firewall"],
+        "summary": "Execute Intent",
+        "description": "Places an atomic ledger HOLD and creates an order on PayPal Sandbox Orders v2.",
+        "operationId": "execute_intent",
+        "parameters": [
+          {
+            "name": "intent_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Order Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntentExecuteResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict - Override or Cooldown Required"
+          }
+        }
+      }
+    },
+    "/api/v1/intents/{intent_id}/capture": {
+      "post": {
+        "tags": ["Intent Firewall"],
+        "summary": "Capture PayPal Order",
+        "description": "Captures the approved PayPal Sandbox Order and settles the ledger HOLD into a posted debit.",
+        "operationId": "capture_intent",
+        "parameters": [
+          {
+            "name": "intent_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IntentCaptureRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Payment Settled"
+          }
+        }
+      }
+    },
+    "/api/v1/overrides": {
+      "post": {
+        "tags": ["Escape Window Overrides"],
+        "summary": "Submit Reflection Confession",
+        "description": "Initiates the Escape Window with a mandatory 200-character reflection and starts a 3-minute cooldown.",
+        "operationId": "create_override",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OverrideCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Cooldown Initiated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OverrideResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Reflection too short (<200 characters)"
+          }
+        }
+      }
+    },
+    "/api/v1/analytics/deep-ledger": {
+      "get": {
+        "tags": ["Deep Analytics & AG Grid"],
+        "summary": "Get Deep Ledger Transactions",
+        "description": "Provides the foundational transaction data feed for the desktop AG Grid view with multi-sorting and state grouping.",
+        "operationId": "get_deep_ledger",
+        "parameters": [
+          { "name": "bucket", "in": "query", "required": false, "schema": { "type": "string" } },
+          { "name": "state", "in": "query", "required": false, "schema": { "type": "string" } },
+          { "name": "category", "in": "query", "required": false, "schema": { "type": "string" } },
+          { "name": "limit", "in": "query", "required": false, "schema": { "type": "integer", "default": 100 } },
+          { "name": "offset", "in": "query", "required": false, "schema": { "type": "integer", "default": 0 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deep Ledger Rows & Aggregates",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeepLedgerResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/coach/messages": {
+      "post": {
+        "tags": ["Financial Coach"],
+        "summary": "Send Query to Financial Coach",
+        "description": "Interrogates the Advanced Reasoning Coach for affordability simulations, chart literacy, or AG Grid deep diagnostics.",
+        "operationId": "post_coach_message",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CoachMessageRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Coach Reasoning Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoachMessageResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/webhooks/paypal": {
+      "post": {
+        "tags": ["PayPal Webhooks"],
+        "summary": "Receive PayPal Webhook Notification",
+        "description": "Inbound webhook listener with cryptographic transmission verification and idempotency check.",
+        "operationId": "handle_paypal_webhook",
+        "responses": {
+          "200": {
+            "description": "Webhook Acknowledged or Duplicate Ignored"
+          },
+          "400": {
+            "description": "Invalid Cryptographic Signature"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "BucketsSummaryResponse": {
+        "type": "object",
+        "properties": {
+          "currency": { "type": "string", "example": "USD" },
+          "buckets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": { "type": "string", "example": "daily" },
+                "name": { "type": "string", "example": "Daily Allowance" },
+                "available": { "type": "integer", "example": 5200 },
+                "held": { "type": "integer", "example": 0 },
+                "pending_paypal": { "type": "integer", "example": 0 }
+              }
+            }
+          }
+        }
+      },
+      "IntentCreate": {
+        "type": "object",
+        "required": ["utterance", "amount"],
+        "properties": {
+          "utterance": { "type": "string", "example": "Buying groceries at Trader Joe's" },
+          "amount": { "type": "integer", "example": 2400, "description": "Amount in minor units (cents)" },
+          "currency": { "type": "string", "default": "USD" },
+          "merchant_name": { "type": "string", "example": "Trader Joe's" }
+        }
+      },
+      "IntentResponse": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "status": { "type": "string", "example": "allowed" },
+          "category": { "type": "string", "example": "groceries" },
+          "necessity": { "type": "string", "example": "daily_living" },
+          "recommended_bucket": { "type": "string", "example": "daily" },
+          "confidence": { "type": "number", "example": 0.95 },
+          "rationale": { "type": "string", "example": "Everyday groceries belong in your Daily Allowance." },
+          "source_bucket": { "type": "string", "example": "daily" },
+          "override_required": { "type": "boolean", "example": false }
+        }
+      },
+      "IntentExecuteResponse": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "example": "executing" },
+          "paypal_order_id": { "type": "string", "example": "5O190127TN364715T" },
+          "approval_url": { "type": "string", "example": "https://www.sandbox.paypal.com/checkoutnow?token=5O190127TN364715T" }
+        }
+      },
+      "IntentCaptureRequest": {
+        "type": "object",
+        "required": ["paypal_order_id"],
+        "properties": {
+          "paypal_order_id": { "type": "string", "example": "5O190127TN364715T" }
+        }
+      },
+      "OverrideCreate": {
+        "type": "object",
+        "required": ["intent_id", "body"],
+        "properties": {
+          "intent_id": { "type": "string", "format": "uuid" },
+          "body": { "type": "string", "description": "Minimum 200 character confession" }
+        }
+      },
+      "OverrideResponse": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "status": { "type": "string", "example": "pending" },
+          "ready_at": { "type": "string", "format": "date-time" },
+          "cooldown_seconds": { "type": "integer", "example": 180 },
+          "partner_required": { "type": "boolean", "example": false }
+        }
+      },
+      "CoachMessageRequest": {
+        "type": "object",
+        "required": ["utterance"],
+        "properties": {
+          "thread_id": { "type": "string", "format": "uuid", "nullable": true },
+          "utterance": { "type": "string", "example": "Can I afford a $20 movie ticket tonight?" },
+          "chart_id": { "type": "string", "nullable": true, "example": "chart_pie_week" },
+          "filter_context": { "type": "object", "nullable": true }
+        }
+      },
+      "CoachMessageResponse": {
+        "type": "object",
+        "properties": {
+          "thread_id": { "type": "string", "format": "uuid" },
+          "message_id": { "type": "string", "format": "uuid" },
+          "reply": { "type": "string" },
+          "citations": { "type": "object", "nullable": true },
+          "suggest_intent": { "type": "object", "nullable": true }
+        }
+      },
+      "DeepLedgerResponse": {
+        "type": "object",
+        "properties": {
+          "total_count": { "type": "integer", "example": 14 },
+          "items": { "type": "array", "items": { "type": "object" } },
+          "aggregates": { "type": "object" }
+        }
+      }
+    }
+  }
+}
