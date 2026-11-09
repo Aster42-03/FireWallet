@@ -81,3 +81,13 @@ async def init_db() -> None:
     import app.models  # noqa: F401
     async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
+        if is_sqlite:
+            from sqlalchemy import text
+            try:
+                await conn.execute(text("ALTER TABLE batch_payment_items ADD COLUMN intent_id TEXT;"))
+            except Exception:
+                pass
+            try:
+                await conn.execute(text("ALTER TABLE batch_payment_items ADD COLUMN note TEXT;"))
+            except Exception:
+                pass

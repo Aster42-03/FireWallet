@@ -31,8 +31,12 @@ async def get_hud_summary(session: AsyncSession, user_id: UUID) -> Dict[str, Any
     vault_in = 0
     bills_paid = 0
 
+    from app.models.user import BudgetPolicy
+    pol_res = await session.exec(select(BudgetPolicy).where(BudgetPolicy.user_id == user_id))
+    policy = pol_res.first()
+
     for entry, category, bucket_kind in rows:
-        if entry.amount < 0:
+        if entry.amount < 0 and (entry.entry_kind == "merchant_spend" or entry.intent_id is not None):
             cat = category or "general"
             spent_by_category[cat] = spent_by_category.get(cat, 0) + abs(entry.amount)
             if bucket_kind:
@@ -51,7 +55,9 @@ async def get_hud_summary(session: AsyncSession, user_id: UUID) -> Dict[str, Any
             "percentage": round((amt / total_spent) * 100, 1)
         }
         for cat, amt in spent_by_category.items()
-    ] or [{"category": "groceries", "amount": 2400, "percentage": 100.0}]
+    ]
+
+    freedom_alloc = policy.freedom_monthly_amount if policy else 15000
 
     charts = [
         {
@@ -74,9 +80,9 @@ async def get_hud_summary(session: AsyncSession, user_id: UUID) -> Dict[str, Any
             "title": "Freedom Envelope Burn",
             "type": "progress",
             "data": {
-                "allocated": 15000,
-                "spent": spent_by_bucket.get("freedom", 6000),
-                "remaining": max(0, 15000 - spent_by_bucket.get("freedom", 6000))
+                "allocated": freedom_alloc,
+                "spent": spent_by_bucket.get("freedom", 0),
+                "remaining": max(0, freedom_alloc - spent_by_bucket.get("freedom", 0))
             }
         }
     ]
@@ -86,6 +92,7 @@ async def get_hud_summary(session: AsyncSession, user_id: UUID) -> Dict[str, Any
         "spent_by_category": spent_by_category,
         "vault_in": vault_in,
         "bills_paid": bills_paid,
-        "overrides_count": 1,
+        "overrides_count": 0,
+        "policy": policy.model_dump() if policy else {},
         "charts": charts
     }

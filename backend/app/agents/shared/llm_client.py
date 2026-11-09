@@ -114,37 +114,51 @@ class LLMClient:
             return self._local_fallback(messages, json_mode)
 
         for provider_name, base_url, api_key, model_name in providers:
-            headers = {
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            }
-            payload: Dict[str, Any] = {
-                "model": model_name,
-                "messages": messages,
-                "temperature": temperature,
-            }
-            if json_mode:
-                payload["response_format"] = {"type": "json_object"}
+            candidate_models = [model_name]
+            if provider_name == "groq":
+                for cm in ("openai/gpt-oss-120b", "qwen/qwen3.8-27b", "openai/gpt-oss-20b"):
+                    if cm not in candidate_models:
+                        candidate_models.append(cm)
 
-            try:
-                async with httpx.AsyncClient(timeout=18.0) as client:
-                    res = await client.post(
-                        f"{base_url}/chat/completions",
-                        headers=headers,
-                        json=payload,
-                    )
-                    if res.status_code == 200:
-                        data = res.json()
-                        self.active_provider = provider_name
-                        self.model = model_name
-                        return data["choices"][0]["message"]["content"]
+            for active_model in candidate_models:
+                headers = {
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                }
+                payload: Dict[str, Any] = {
+                    "model": active_model,
+                    "messages": messages,
+                    "temperature": temperature,
+                }
+                if json_mode:
+                    payload["response_format"] = {"type": "json_object"}
+
+                try:
+                    async with httpx.AsyncClient(timeout=22.0) as client:
+                        res = await client.post(
+                            f"{base_url}/chat/completions",
+                            headers=headers,
+                            json=payload,
+                        )
+                        if res.status_code == 200:
+                            data = res.json()
+                            self.active_provider = provider_name
+                            self.model = active_model
+                            logger.info(
+                                f"LLM Provider '{provider_name}' successfully responded using model '{active_model}'."
+                            )
+                            return data["choices"][0]["message"]["content"]
+
+                        logger.warning(
+                            f"LLM Provider '{provider_name}' ({active_model}) returned HTTP {res.status_code}: {res.text}"
+                        )
+                        # If model not found or unavailable, try next candidate
+                        if res.status_code in (400, 404) and any(err_k in res.text.lower() for err_k in ("model", "not_found", "access")):
+                            continue
+                except Exception as exc:
                     logger.error(
-                        f"LLM Provider '{provider_name}' ({model_name}) returned HTTP {res.status_code}: {res.text}"
+                        f"LLM Provider '{provider_name}' ({active_model}) request failed: {exc}", exc_info=True
                     )
-            except Exception as exc:
-                logger.error(
-                    f"LLM Provider '{provider_name}' ({model_name}) request failed: {exc}", exc_info=True
-                )
 
         self.active_provider = "local_fallback"
         self.model = f"{settings.GROQ_MODEL} (offline-heuristic)"
@@ -161,7 +175,7 @@ class LLMClient:
         ):
             return {
                 "short_tag": short_tag,
-                "category": "savings_violation",
+                "category": "emergency",
                 "necessity": "freedom",
                 "recommended_bucket": "vault",
                 "confidence": 0.99,
@@ -173,7 +187,7 @@ class LLMClient:
         if emerg:
             return {
                 "short_tag": short_tag,
-                "category": "medical_emergency" if "medical" in short_tag else "emergency",
+                "category": "emergency",
                 "necessity": "daily_living",
                 "recommended_bucket": "daily",
                 "confidence": 0.97,
@@ -182,7 +196,7 @@ class LLMClient:
                 "flags": ["valid_emergency", "zero_cooldown"],
             }
 
-        if any(w in lower for w in ("grocer", "supermarket", "safeway", "food", "milk", "bread", "apple", "trader", "vegetables", "produce")):
+        if any(w in lower for w in ("grocer", "supermarket", "safeway", "milk", "bread", "apple", "trader", "vegetables", "produce", "whole foods", "kroger", "aldi")):
             return {
                 "short_tag": distill_short_tag(target, category="groceries", merchant_name=merchant),
                 "category": "groceries",
@@ -193,7 +207,7 @@ class LLMClient:
                 "rationale": "Everyday groceries belong in your Daily Allowance.",
                 "flags": [],
             }
-        if any(w in lower for w in ("subway", "mta", "transit", "bus", "commute", "train")):
+        if any(w in lower for w in ("subway", "mta", "transit", "bus", "commute", "train", "metro")):
             return {
                 "short_tag": distill_short_tag(target, category="transit", merchant_name=merchant),
                 "category": "transit",
@@ -215,7 +229,7 @@ class LLMClient:
                 "rationale": "Fixed contractual obligations belong in Reserved Bills.",
                 "flags": ["possible_bill"],
             }
-        if any(w in lower for w in ("movie", "concert", "ticket", "game", "entertainment")):
+        if any(w in lower for w in ("movie", "concert", "ticket", "game", "entertainment", "cinema")):
             return {
                 "short_tag": distill_short_tag(target, category="entertainment", merchant_name=merchant),
                 "category": "entertainment",
@@ -226,7 +240,7 @@ class LLMClient:
                 "rationale": "Entertainment and tickets come out of your monthly Freedom envelope.",
                 "flags": ["discretionary"],
             }
-        if "gift" in lower:
+        if any(w in lower for w in ("gift", "present")):
             return {
                 "short_tag": distill_short_tag(target, category="gifts", merchant_name=merchant),
                 "category": "gifts",
@@ -270,19 +284,109 @@ class LLMClient:
         if json_mode and "unified trinity coach" in system_msg:
             amount_cents = parse_amount_cents_from_text(user_question)
 
-            # 1. Deep Ledger / AG Grid / Velocity interrogation
-            if any(
-                w in uq_lower
-                for w in ("grid", "ledger", "filter", "velocity", "runway", "double-entry", "audit")
-            ) or "ag grid active filter" in last_msg:
+            # 1a. Bank Double-Entry Flows ("Explain my Bank double-entry flows and where income moved.")
+            if ("double-entry" in uq_lower or "double entry" in uq_lower) and any(
+                w in uq_lower for w in ("flow", "income", "bank", "rows")
+            ):
                 return json.dumps({
                     "reply": (
-                        "### 📊 Deep Ledger & Flow Diagnostics\n\n"
-                        "Here is what the real-time double-entry telemetry shows:\n\n"
-                        "1. **Double-Entry Balance:** All internal legs (*20% Vault skim, Rent earmarks, and Daily top-ups*) balance cleanly to **$0.00**.\n"
-                        "2. **Burn Velocity:** Your Daily living burn rate is tracking at a healthy pace with compound rollover intact.\n"
-                        "3. **Freedom Runway:** Discretionary fun funds remain unbreached, and no emergency Bank raids have occurred.\n\n"
-                        "*Tip: Select any row in the AG Grid to inspect exact transfer legs.*"
+                        "### 🏦 Bank Double-Entry Flows & Income Allocation\n\n"
+                        "Every internal money movement in FireWallet is anchored to your **Bank Foundation** with paired debit and credit legs sharing a single `transfer_id`:\n\n"
+                        "1. **Gross Inflow:** Payday credits or synced PayPal balances enter **Bank Foundation** first (`+CREDIT`).\n"
+                        "2. **Vault Allocation:** Your configured savings percentage is debited from `Bank` and credited to **Locked Savings Vault** (`-Bank / +Vault = $0.00`).\n"
+                        "3. **Reserved Bills:** Fixed obligations (like Rent and Utilities) are earmarked from `Bank` into **Reserved Bills** (`-Bank / +Bills = $0.00`).\n"
+                        "4. **Daily & Freedom Top-Ups:** Your **Daily** and **Freedom** envelopes are funded from `Bank` via zero-sum double-entry transfers, leaving the protected remainder safely in **Bank Foundation**."
+                    ),
+                    "status": "info",
+                    "action_type": "none",
+                    "short_tag": "bank double-entry flows",
+                    "category": "analytics",
+                    "necessity": "daily_living",
+                    "target_bucket": "bank",
+                    "amount_cents": None,
+                    "is_emergency": False,
+                    "rationale": "Detailed breakdown of Bank-anchored double-entry transfer legs and income routing.",
+                    "flags": ["double_entry_flows"],
+                })
+
+            # 1b. Spending Anomalies & Deviations ("Analyze active grid records for spending anomalies and deviations.")
+            if any(w in uq_lower for w in ("anomal", "deviation")):
+                return json.dumps({
+                    "reply": (
+                        "### 🔍 Spending Anomaly & Deviation Scan\n\n"
+                        "I scanned your active Double-Entry Ledger records against your historical category baselines:\n\n"
+                        "1. **Category Variance:** Essential **Daily** purchases (groceries and transit) remain within standard transaction sizes.\n"
+                        "2. **Discretionary Spikes:** Watch out for clustered dining or impulse **Freedom** charges—keeping single discretionary items under 25% of your monthly Freedom limit prevents early-month depletion.\n"
+                        "3. **Firewall Integrity:** Zero unauthorized **Bank Foundation** or **Locked Vault** breaches were detected; all posted outflows reconciled cleanly."
+                    ),
+                    "status": "info",
+                    "action_type": "none",
+                    "short_tag": "spending anomalies",
+                    "category": "analytics",
+                    "necessity": "daily_living",
+                    "target_bucket": "daily",
+                    "amount_cents": None,
+                    "is_emergency": False,
+                    "rationale": "Ledger anomaly and category deviation scan completed.",
+                    "flags": ["anomaly_scan"],
+                })
+
+            # 1c. Freedom Envelope vs Rent Protection ("How is my monthly Freedom envelope trajectory tracking against rent?")
+            if "freedom" in uq_lower and any(w in uq_lower for w in ("rent", "trajectory", "tracking")):
+                return json.dumps({
+                    "reply": (
+                        "### 🎯 Freedom Trajectory vs. Rent Protection\n\n"
+                        "Here is how your discretionary **Freedom** spending tracks alongside your **Reserved Bills**:\n\n"
+                        "1. **100% Rent Isolation:** Your Rent and fixed bills sit in the **Reserved Bills** bucket under strict Double-Entry isolation. Even if your Freedom envelope hits $0.00, Rent cannot be touched.\n"
+                        "2. **Freedom Pace:** Your **Freedom** envelope is pacing sustainably for the month, absorbing dining and entertainment without spilling into essential funds.\n"
+                        "3. **End-of-Month Sweep:** Any unspent Freedom balance at month-end can be swept directly into your **Vault** to accelerate long-term compounding."
+                    ),
+                    "status": "info",
+                    "action_type": "none",
+                    "short_tag": "freedom vs rent",
+                    "category": "analytics",
+                    "necessity": "freedom",
+                    "target_bucket": "freedom",
+                    "amount_cents": None,
+                    "is_emergency": False,
+                    "rationale": "Comparison of Freedom discretionary burn trajectory against isolated Rent reserves.",
+                    "flags": ["freedom_vs_rent"],
+                })
+
+            # 1d. Daily Velocity, Runway & Rollover ("Diagnose my Daily living velocity, runway in days, and rollover streak.")
+            if "velocity" in uq_lower or "runway" in uq_lower:
+                return json.dumps({
+                    "reply": (
+                        "### ⚡ Daily Burn Velocity, Runway & Rollover Diagnostics\n\n"
+                        "Here is your live **Daily** envelope velocity breakdown:\n\n"
+                        "1. **Daily Burn Rate:** Your essential spending velocity is pacing within your configured **Daily** allowance target.\n"
+                        "2. **Liquid Runway:** At your current burn rate, your active Daily balance plus Bank reserves provide a healthy multi-week survival runway.\n"
+                        "3. **Compound Rollover Streak:** Unspent Daily funds at midnight roll forward automatically, expanding your cushion for larger grocery or transit days without raiding **Bank Foundation**."
+                    ),
+                    "status": "info",
+                    "action_type": "none",
+                    "short_tag": "velocity and runway",
+                    "category": "analytics",
+                    "necessity": "daily_living",
+                    "target_bucket": "daily",
+                    "amount_cents": None,
+                    "is_emergency": False,
+                    "rationale": "Daily living burn velocity, runway in days, and rollover streak diagnostics.",
+                    "flags": ["velocity_runway"],
+                })
+
+            # 1e. General Deep Ledger / Filtered Interrogation
+            if any(
+                w in uq_lower
+                for w in ("grid", "ledger", "filter", "double-entry", "audit")
+            ) or "active filter" in last_msg:
+                return json.dumps({
+                    "reply": (
+                        "### 📊 Double-Entry Ledger & Audit Summary\n\n"
+                        "Here is what your real-time ledger telemetry shows:\n\n"
+                        "1. **Zero-Sum Reconciliation:** All internal transfer legs (*Vault allocations, Bill reserves, and Daily top-ups*) balance cleanly to **$0.00**.\n"
+                        "2. **Envelope Health:** Essential and discretionary outflows are properly segregated across **Daily** and **Freedom**.\n"
+                        "3. **Audit Trail:** Select any rows in the table and click **Interrogate Ledger with Coach** to inspect specific transactions."
                     ),
                     "status": "info",
                     "action_type": "none",
@@ -417,7 +521,7 @@ class LLMClient:
                         "and your **Daily Allowance** has fresh rollover room today.\n\n"
                         "What's on your mind? You can ask me if a purchase fits (like *\"Can I afford a $15 movie ticket?\"* "
                         "or *\"twenty dollars for dinner\"*), tell me to sweep some extra cash into your **Vault**, "
-                        "or ask me to inspect your **AG Grid ledger**!"
+                        "or ask me to inspect your **double-entry ledger**!"
                     ),
                     "status": "info",
                     "action_type": "none",

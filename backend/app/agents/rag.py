@@ -209,6 +209,18 @@ def distill_short_tag(
     if any(w in lower for w in ("sweep", "move to vault", "transfer to vault", "save to vault", "skim to vault")):
         return "vault sweep"
 
+    if ("double-entry" in lower or "double entry" in lower) and any(w in lower for w in ("flow", "income", "bank", "rows")):
+        return "bank double-entry flows"
+
+    if any(w in lower for w in ("anomal", "deviation")):
+        return "spending anomalies"
+
+    if "freedom" in lower and any(w in lower for w in ("rent", "trajectory", "tracking")):
+        return "freedom vs rent"
+
+    if "velocity" in lower and "runway" in lower:
+        return "velocity and runway"
+
     if "rollover" in lower or "streak" in lower:
         return "rollover streak"
 

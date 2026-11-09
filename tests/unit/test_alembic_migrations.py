@@ -8,8 +8,8 @@ from sqlalchemy import create_engine, inspect
 @pytest.mark.unit
 def test_alembic_migrations_lifecycle():
     """
-    Verifies that Alembic migration scripts (0001_initial_schema -> 0002_add_double_entry -> 0003_phase3_rag_status)
-    can apply to a pristine database, downgrade back to base, and re-upgrade to head cleanly.
+    Verifies that Alembic migration scripts can apply to a pristine database,
+    downgrade back to base, and re-upgrade to head cleanly.
     """
     # Create temporary database file
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp_db:

@@ -9,25 +9,56 @@ import {
   ExternalLink,
   Tag,
   Sparkles,
-  Zap
+  Zap,
+  Layers,
+  CheckCircle2
 } from 'lucide-react';
-import { submitIntent, executeIntent, captureIntent } from '../../shared/api';
+import { submitIntent, executeIntent, captureIntent, stageIntentToBatch, getIntentOrderStatus } from '../../shared/api';
 
 export default function QuickIntentModal({
   isOpen,
   onClose,
   onOpenOverride,
   onAskCoach,
+  onOpenBatchDispatcher,
   onSuccess
 }) {
-  const [amountStr, setAmountStr] = useState('24.00');
-  const [utterance, setUtterance] = useState("Buying groceries at Trader Joe's");
-  const [merchant, setMerchant] = useState("Trader Joe's");
+  const [amountStr, setAmountStr] = useState('');
+  const [utterance, setUtterance] = useState('');
+  const [merchant, setMerchant] = useState('');
 
   const [loading, setLoading] = useState(false);
   const [executing, setExecuting] = useState(false);
+  const [staging, setStaging] = useState(false);
+  const [stagedSuccess, setStagedSuccess] = useState(false);
+  const [batchEmail, setBatchEmail] = useState('');
+  const [showEmailPrompt, setShowEmailPrompt] = useState(false);
   const [verdict, setVerdict] = useState(null);
   const [error, setError] = useState(null);
+
+  // Interactive PayPal Sandbox Approval Loop states
+  const [approvalState, setApprovalState] = useState(null); // { orderId, approvalUrl }
+  const [capturing, setCapturing] = useState(false);
+  const [captureError, setCaptureError] = useState(null);
+  const [captureSuccess, setCaptureSuccess] = useState(null); // { captureId, orderId, bucket }
+
+  React.useEffect(() => {
+    if (!isOpen) {
+      setVerdict(null);
+      setError(null);
+      setAmountStr('');
+      setUtterance('');
+      setMerchant('');
+      setStagedSuccess(false);
+      setShowEmailPrompt(false);
+      setBatchEmail('');
+      setStaging(false);
+      setApprovalState(null);
+      setCapturing(false);
+      setCaptureError(null);
+      setCaptureSuccess(null);
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -35,6 +66,8 @@ export default function QuickIntentModal({
     e.preventDefault();
     setError(null);
     setLoading(true);
+    setStagedSuccess(false);
+    setShowEmailPrompt(false);
     try {
       const cents = Math.round(parseFloat(amountStr || '0') * 100);
       if (isNaN(cents) || cents <= 0) {
@@ -42,6 +75,9 @@ export default function QuickIntentModal({
       }
       const res = await submitIntent(utterance, cents, merchant);
       setVerdict(res);
+      if (merchant && merchant.includes('@')) {
+        setBatchEmail(merchant);
+      }
     } catch (err) {
       setError(err.message || 'Evaluation failed');
     } finally {
@@ -49,32 +85,116 @@ export default function QuickIntentModal({
     }
   };
 
+  // Auto-poll PayPal Order status while waiting for buyer approval
+  React.useEffect(() => {
+    if (!approvalState || capturing || captureSuccess || !verdict) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const statusData = await getIntentOrderStatus(verdict.id);
+        if (statusData.order_status === 'APPROVED') {
+          handleConfirmCapture(approvalState.orderId);
+        }
+      } catch (err) {
+        // Quiet poll fail
+      }
+    }, 2500);
+
+    return () => clearInterval(interval);
+  }, [approvalState, capturing, captureSuccess, verdict]);
+
   const handleExecutePayPal = async () => {
     if (!verdict) return;
     setExecuting(true);
     setError(null);
+    setCaptureError(null);
+    setApprovalState(null);
+    setCaptureSuccess(null);
+
     try {
-      const execRes = await executeIntent(verdict.id);
-      
-      // If a real approval URL is returned, open it for user authorization
-      if (execRes.approval_url && !execRes.approval_url.includes('ORDER-MOCK')) {
-        window.open(execRes.approval_url, '_blank', 'noopener,noreferrer');
+      const returnUrl = `${window.location.origin}/?paypal_return=true&intent_id=${verdict.id}`;
+      const execRes = await executeIntent(verdict.id, returnUrl);
+
+      // Offline / Simulated Sandbox Mock flow
+      if (!execRes.approval_url || execRes.approval_url.includes('ORDER-MOCK')) {
+        const capRes = await captureIntent(verdict.id, execRes.paypal_order_id);
+        setCaptureSuccess({
+          captureId: capRes.paypal_capture_id,
+          orderId: execRes.paypal_order_id,
+          bucket: verdict.source_bucket || verdict.recommended_bucket || 'freedom'
+        });
+        onSuccess?.();
+        return;
       }
 
-      await captureIntent(verdict.id, execRes.paypal_order_id);
+      // Real interactive PayPal Sandbox flow
+      setApprovalState({
+        orderId: execRes.paypal_order_id,
+        approvalUrl: execRes.approval_url,
+      });
 
-      alert(
-        `PayPal Sandbox Payment Captured Successfully!\n\n` +
-        `• PayPal Order ID: ${execRes.paypal_order_id}\n` +
-        `• Bucket Debited: ${verdict.source_bucket.toUpperCase()}\n` +
-        `• Tag: #${verdict.short_tag || verdict.category}`
-      );
-      onSuccess?.();
-      onClose();
+      // Open PayPal approval window
+      window.open(execRes.approval_url, '_blank', 'noopener,noreferrer');
     } catch (err) {
-      setError(err.message || 'Payment execution failed');
+      setError(err.message || 'Payment execution initiation failed');
     } finally {
       setExecuting(false);
+    }
+  };
+
+  const handleConfirmCapture = async (orderIdOverride) => {
+    const orderId = orderIdOverride || approvalState?.orderId;
+    if (!orderId || !verdict) return;
+
+    setCapturing(true);
+    setCaptureError(null);
+    try {
+      const capRes = await captureIntent(verdict.id, orderId);
+      setCaptureSuccess({
+        captureId: capRes.paypal_capture_id,
+        orderId: orderId,
+        bucket: verdict.source_bucket || verdict.recommended_bucket || 'freedom'
+      });
+      onSuccess?.();
+    } catch (err) {
+      const isUnapproved = err.message?.includes('ORDER_NOT_APPROVED');
+      setCaptureError(
+        isUnapproved
+          ? 'PayPal reports buyer approval is not finished yet. Please log into the PayPal window, review the amount, and click "Continue" / "Agree", then click here to complete.'
+          : err.message || 'Capture failed'
+      );
+    } finally {
+      setCapturing(false);
+    }
+  };
+
+  const handleStageToBatch = async (emailOverride) => {
+    if (!verdict) return;
+    const finalEmail = emailOverride || batchEmail || (merchant && merchant.includes('@') ? merchant : '');
+    if (!finalEmail || !finalEmail.includes('@')) {
+      setShowEmailPrompt(true);
+      return;
+    }
+    setStaging(true);
+    setError(null);
+    try {
+      const cents = verdict.amount || Math.round(parseFloat(amountStr || '0') * 100);
+      await stageIntentToBatch({
+        intent_id: verdict.id,
+        recipient_email: finalEmail,
+        amount_cents: cents,
+        currency: verdict.currency || 'USD',
+        category: verdict.category || 'bills',
+        source_bucket: verdict.source_bucket === 'vault' ? 'vault' : 'bills',
+        note: utterance || `Quick Intent to ${finalEmail}`,
+      });
+      setStagedSuccess(true);
+      setShowEmailPrompt(false);
+      onSuccess?.();
+    } catch (err) {
+      setError(err.message || 'Failed to stage into Batch Dispatcher');
+    } finally {
+      setStaging(false);
     }
   };
 
@@ -239,24 +359,180 @@ export default function QuickIntentModal({
               </div>
             </div>
 
-            {isAccepted ? (
-              <button
-                onClick={handleExecutePayPal}
-                disabled={executing}
-                className="w-full py-3.5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-extrabold rounded-xl flex items-center justify-center gap-2 shadow-lg transition-all disabled:opacity-50"
-              >
-                {executing ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Executing PayPal Orders v2...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>{verdict.action_card?.label || 'Pay with PayPal Sandbox'}</span>
+            {captureSuccess ? (
+              <div className="p-4 rounded-xl bg-emerald-950/70 border border-emerald-800 text-emerald-200 flex flex-col gap-2.5 animate-in fade-in">
+                <div className="flex items-center gap-2 text-sm font-bold text-emerald-300">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                  <span>PayPal Sandbox Payment Captured &amp; Settled!</span>
+                </div>
+                <div className="space-y-1 text-xs text-slate-300">
+                  <p>• PayPal Capture ID: <strong className="text-white font-mono">{captureSuccess.captureId}</strong></p>
+                  <p>• PayPal Order ID: <strong className="text-white font-mono">{captureSuccess.orderId}</strong></p>
+                  <p>• Bucket Debited: <strong className="text-white uppercase">{captureSuccess.bucket}</strong></p>
+                  <p>• Double-Entry Ledger: <span className="text-emerald-300 font-semibold">Posted &amp; Reconciled</span></p>
+                </div>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="mt-2 w-full py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs transition-colors shadow"
+                >
+                  Done
+                </button>
+              </div>
+            ) : approvalState ? (
+              <div className="p-4 rounded-xl bg-slate-950/90 border border-amber-500/40 space-y-3.5 animate-in fade-in">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
                     <ExternalLink className="w-4 h-4" />
-                  </>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white">Approve in PayPal Sandbox</h4>
+                    <p className="text-[11px] text-amber-300">Checkout opened in another window</p>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-lg bg-slate-900 border border-slate-800 space-y-1.5 text-xs text-slate-300">
+                  <p className="font-semibold text-white">Interactive Sandbox Steps:</p>
+                  <ol className="list-decimal pl-4 space-y-1 text-slate-400 text-[11px]">
+                    <li>Log into PayPal using your <strong>Sandbox Personal Buyer</strong> credentials.</li>
+                    <li>Review <strong>${((verdict.amount || 0) / 100).toFixed(2)}</strong> and click <strong>"Continue" / "Agree"</strong>.</li>
+                    <li>Click <strong>"Complete &amp; Settle"</strong> below (or auto-detect will capture).</li>
+                  </ol>
+                </div>
+
+                {captureError && (
+                  <div className="p-2.5 rounded-lg bg-rose-950/60 border border-rose-800 text-xs text-rose-300 flex items-start gap-2">
+                    <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                    <span className="leading-relaxed">{captureError}</span>
+                  </div>
                 )}
-              </button>
+
+                <div className="space-y-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => handleConfirmCapture()}
+                    disabled={capturing}
+                    className="w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-extrabold rounded-xl flex items-center justify-center gap-2 shadow-lg transition-all disabled:opacity-50 text-xs"
+                  >
+                    {capturing ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Verifying Completion with PayPal...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>I've Approved on PayPal — Complete &amp; Settle</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => window.open(approvalState.approvalUrl, '_blank', 'noopener,noreferrer')}
+                    className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium rounded-lg text-xs flex items-center justify-center gap-1.5 transition-colors"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Reopen PayPal Checkout Window</span>
+                  </button>
+                </div>
+              </div>
+            ) : stagedSuccess ? (
+              <div className="p-4 rounded-xl bg-sky-950/70 border border-sky-800 text-sky-200 flex flex-col gap-2.5 animate-in fade-in">
+                <div className="flex items-center gap-2 text-sm font-bold text-sky-300">
+                  <CheckCircle2 className="w-5 h-5 text-sky-400" />
+                  <span>Staged in The Trinity Batch Dispatcher!</span>
+                </div>
+                <p className="text-xs text-slate-300">
+                  This obligation of <strong>${((verdict.amount || 0) / 100).toFixed(2)}</strong> is queued as <em>pending approval</em> under your isolated Reserved Bills reserve.
+                </p>
+                {onOpenBatchDispatcher && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onOpenBatchDispatcher();
+                    }}
+                    className="w-full py-2.5 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold rounded-xl flex items-center justify-center gap-2 text-xs transition-colors shadow"
+                  >
+                    <Layers className="w-4 h-4" />
+                    <span>Open Batch Dispatcher ({verdict.source_bucket.toUpperCase()})</span>
+                  </button>
+                )}
+              </div>
+            ) : isAccepted ? (
+              <div className="space-y-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    onClick={handleExecutePayPal}
+                    disabled={executing || staging}
+                    className="py-3 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-extrabold rounded-xl flex items-center justify-center gap-1.5 shadow-lg transition-all disabled:opacity-50 text-xs"
+                  >
+                    {executing ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Starting PayPal Checkout...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Pay with PayPal Sandbox</span>
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!merchant.includes('@') && !batchEmail) {
+                        setShowEmailPrompt(true);
+                      } else {
+                        handleStageToBatch();
+                      }
+                    }}
+                    disabled={executing || staging}
+                    className="py-3 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 shadow-lg transition-all disabled:opacity-50 text-xs"
+                  >
+                    {staging ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Staging...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Layers className="w-3.5 h-3.5" />
+                        <span>Add to Batch Queue</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {showEmailPrompt && (
+                  <div className="p-3 bg-slate-950/90 border border-slate-700 rounded-xl space-y-2 text-xs animate-in fade-in">
+                    <label className="text-[11px] font-semibold text-slate-300 block">
+                      PayPal Payee Email for Batch Payout:
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="email"
+                        required
+                        value={batchEmail}
+                        onChange={(e) => setBatchEmail(e.target.value)}
+                        placeholder="payee@sandbox.paypal.com"
+                        className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-sky-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleStageToBatch(batchEmail)}
+                        disabled={!batchEmail.includes('@') || staging}
+                        className="px-3 py-1.5 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold rounded-lg text-xs disabled:opacity-50"
+                      >
+                        Confirm Stage
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             ) : (
               <div className="space-y-2.5">
                 {/* Refer to Coach for Conversational Reasoning */}

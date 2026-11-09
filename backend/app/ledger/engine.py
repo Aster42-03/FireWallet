@@ -90,7 +90,8 @@ class LedgerEngine:
         amount_minor: int,
         source_kind: str,
         necessity: str,
-        has_approved_override: bool = False
+        has_approved_override: bool = False,
+        is_emergency: bool = False,
     ) -> Tuple[bool, str, str]:
         """
         Evaluate deterministic Trinity invariants against a proposed expenditure.
@@ -102,6 +103,7 @@ class LedgerEngine:
             source_kind: Target bucket ('daily', 'freedom', 'bank', etc.).
             necessity: Classified necessity category ('daily_living', 'freedom', 'bill', etc.).
             has_approved_override: Whether an Escape Window override was completed.
+            is_emergency: Whether the spend is a verified genuine life/medical emergency.
             
         Returns:
             Tuple of (is_allowed: bool, status: str, rationale: str)
@@ -115,15 +117,25 @@ class LedgerEngine:
         if not source_info:
             return False, "denied", f"Bucket '{source_kind}' not found."
 
-        # Rule 1: Vault is locked long-term savings
+        # Rule 1: Vault is locked long-term savings (Emergency exception)
         if source_kind == "vault":
-            return False, "denied", "Vault is locked long-term savings. Direct spend is strictly forbidden."
+            if not is_emergency:
+                return False, "denied", "Vault is locked long-term savings. Direct spend is strictly forbidden."
 
         # Rule 2: Bills bucket is strictly reserved
         if source_kind == "bills" and necessity != "bill":
             return False, "denied", "Bills bucket is strictly reserved for fixed contractual obligations."
 
         # Rule 3: Balance check
+        if source_kind == "vault" and is_emergency:
+            # Emergency draw checks combined pool of Vault + Bank Foundation
+            vault_avail = source_info.get("available", 0)
+            bank_info = balances.get("bank", {})
+            bank_avail = bank_info.get("available", 0)
+            if vault_avail + bank_avail < amount_minor:
+                return False, "denied", "Insufficient emergency reserves across Vault and Bank Foundation."
+            return True, "allowed", "Emergency vault draw permitted."
+
         if source_info["available"] < amount_minor:
             # Check fallback to Bank
             if source_kind in ("daily", "freedom"):
@@ -328,3 +340,128 @@ class LedgerEngine:
         await session.refresh(debit_leg)
         await session.refresh(credit_leg)
         return debit_leg, credit_leg
+
+    @staticmethod
+    async def sync_and_allocate_buckets(
+        session: AsyncSession,
+        user_id: UUID,
+        target_total_cents: Optional[int] = None
+    ) -> Dict[str, Dict[str, int]]:
+        """
+        Synchronizes total ledger balance with an external PayPal account balance
+        (when target_total_cents is provided) and reallocates funds across the 5
+        Trinity buckets according to the user's BudgetPolicy and active Bills.
+        All internal reallocations are recorded as zero-sum double-entry transfers
+        anchored to Bank Foundation.
+        """
+        from app.models.bill import Bill
+
+        balances = await LedgerEngine.get_bucket_balances(session, user_id)
+        if "bank" not in balances:
+            return balances
+
+        pol_res = await session.exec(select(BudgetPolicy).where(BudgetPolicy.user_id == user_id))
+        policy = pol_res.first()
+
+        bills_res = await session.exec(
+            select(Bill).where(Bill.user_id == user_id).where(Bill.status == "scheduled")
+        )
+        scheduled_bills = bills_res.all()
+
+        current_total = sum(b["posted"] for b in balances.values())
+        current_bills_posted = balances.get("bills", {}).get("posted", 0)
+
+        # Step 1: Reconcile total ledger pool with actual PayPal balance if specified
+        if target_total_cents is not None:
+            delta = target_total_cents - current_total
+            if delta != 0:
+                ts = utc_now()
+                sync_id = uuid4()
+                reconcile_entry = LedgerEntry(
+                    transfer_id=sync_id,
+                    user_id=user_id,
+                    bucket_id=balances["bank"]["bucket_id"],
+                    amount=delta,
+                    currency="USD",
+                    state="posted",
+                    entry_kind="payday_inflow",
+                    counterparty_bucket="paypal_account",
+                    memo=f"PayPal Account Balance Sync (${target_total_cents / 100:.2f})",
+                    idempotency_key=f"sync:paypal:{sync_id}",
+                    created_at=ts,
+                    posted_at=ts,
+                )
+                session.add(reconcile_entry)
+                await session.commit()
+                balances = await LedgerEngine.get_bucket_balances(session, user_id)
+            total_pool = max(0, target_total_cents)
+        else:
+            total_pool = max(0, current_total)
+
+        # Step 2: Calculate target allocations from policy rules
+        vault_bps = policy.vault_skim_bps if policy else 2000
+        daily_target_cfg = policy.daily_amount if policy else 4000
+        freedom_target_cfg = policy.freedom_monthly_amount if policy else 15000
+        if policy and policy.bills_monthly_amount is not None:
+            bills_target_cfg = policy.bills_monthly_amount
+        else:
+            bills_target_cfg = (
+                current_bills_posted
+                if current_bills_posted > 0
+                else sum(b.amount for b in scheduled_bills)
+            )
+
+        rem = total_pool
+        target_vault = min(rem, (total_pool * vault_bps) // 10000)
+        rem -= target_vault
+
+        target_bills = min(rem, max(0, bills_target_cfg))
+        rem -= target_bills
+
+        target_daily = min(rem, max(0, daily_target_cfg))
+        rem -= target_daily
+
+        target_freedom = min(rem, max(0, freedom_target_cfg))
+        rem -= target_freedom
+
+        targets = {
+            "vault": (target_vault, "vault_skim", "Vault Allocation Sync"),
+            "bills": (target_bills, "bill_reserve", "Reserved Bills Sync"),
+            "daily": (target_daily, "morning_topup", "Daily Allocation Sync"),
+            "freedom": (target_freedom, "freedom_allocation", "Freedom Allocation Sync"),
+        }
+
+        bank_id = balances["bank"]["bucket_id"]
+
+        for kind, (target_amt, entry_kind, memo_str) in targets.items():
+            if kind not in balances:
+                continue
+            b_id = balances[kind]["bucket_id"]
+            curr_amt = balances[kind]["posted"]
+            diff = target_amt - curr_amt
+            if diff > 0:
+                await LedgerEngine.record_double_entry_transfer(
+                    session=session,
+                    user_id=user_id,
+                    from_bucket_id=bank_id,
+                    to_bucket_id=b_id,
+                    amount_minor=diff,
+                    entry_kind=entry_kind,
+                    memo=memo_str,
+                    from_bucket_kind="bank",
+                    to_bucket_kind=kind,
+                )
+            elif diff < 0:
+                await LedgerEngine.record_double_entry_transfer(
+                    session=session,
+                    user_id=user_id,
+                    from_bucket_id=b_id,
+                    to_bucket_id=bank_id,
+                    amount_minor=abs(diff),
+                    entry_kind=entry_kind,
+                    memo=f"{memo_str} Return to Bank",
+                    from_bucket_kind=kind,
+                    to_bucket_kind="bank",
+                )
+
+        return await LedgerEngine.get_bucket_balances(session, user_id)

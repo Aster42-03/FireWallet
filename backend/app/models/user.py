@@ -32,6 +32,7 @@ class BudgetPolicyBase(SQLModel):
     vault_skim_bps: int = Field(default=2000, ge=0, le=10000, description="Basis points skimmed to Vault (2000 = 20%)")
     daily_amount: int = Field(default=4000, ge=0, description="Target Daily balance in minor units (cents)")
     freedom_monthly_amount: int = Field(default=15000, ge=0, description="Monthly fun envelope in cents")
+    bills_monthly_amount: Optional[int] = Field(default=120000, ge=0, description="Target Reserved Bills balance in cents")
     bank_spend_requires_override: bool = Field(default=True)
     vault_spend_allowed: bool = Field(default=False)
     override_min_chars: int = Field(default=200, ge=50)
@@ -50,6 +51,7 @@ class BudgetPolicyUpdate(SQLModel):
     vault_skim_bps: Optional[int] = None
     daily_amount: Optional[int] = None
     freedom_monthly_amount: Optional[int] = None
+    bills_monthly_amount: Optional[int] = None
     bank_spend_requires_override: Optional[bool] = None
     vault_spend_allowed: Optional[bool] = None
     override_min_chars: Optional[int] = None

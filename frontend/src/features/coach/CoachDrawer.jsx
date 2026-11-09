@@ -1,7 +1,7 @@
 /**
  * CoachDrawer - Unified Monolithic AI Financial Coach Interface
  * =============================================================
- * Dual-mode conversational panel powered by Groq Llama 3.3 70B (`CoachDecision`)
+ * Dual-mode conversational panel powered by Single-Call AI Engine (`CoachDecision`)
  * + deterministic `LedgerEngine` guardrails + RAG `short_tag` memory:
  * 1. 'sidebar': Desktop side-by-side pane alongside AG Grid workbench.
  * 2. 'drawer': Mobile slide-over modal accessible from the HUD.
@@ -29,7 +29,7 @@ import {
   Zap,
   Database
 } from 'lucide-react';
-import { sendCoachMessage, executeCoachAction } from '../../shared/api';
+import { sendCoachMessage, executeCoachAction, fetchCoachStatus, captureIntent } from '../../shared/api';
 import { MarkdownRenderer } from './MarkdownRenderer';
 
 export function CoachDrawer({
@@ -49,7 +49,10 @@ export function CoachDrawer({
       id: 'welcome',
       role: 'assistant',
       content:
-        'Hello! I am your Unified Trinity Coach. Ask me if you can afford a purchase (e.g. "$15 movie ticket" or "$28 groceries"), sweep savings to your Vault, handle an urgent emergency, or audit your double-entry AG Grid ledger — and I will prepare a 1-tap action card for you!'
+        'Hello! I am your Financial Coach. Ask me if a purchase fits your budget, sweep funds into your Vault, handle an urgent emergency, or inspect your double-entry ledger — and I will prepare a 1-tap action card for you.',
+      displayedContent:
+        'Hello! I am your Financial Coach. Ask me if a purchase fits your budget, sweep funds into your Vault, handle an urgent emergency, or inspect your double-entry ledger — and I will prepare a 1-tap action card for you.',
+      isStreaming: false
     }
   ]);
   const [input, setInput] = useState('');
@@ -57,6 +60,7 @@ export function CoachDrawer({
   const [threadId, setThreadId] = useState(null);
   const [executingMsgId, setExecutingMsgId] = useState(null);
   const [executedResults, setExecutedResults] = useState({});
+  const [coachStatus, setCoachStatus] = useState(null);
 
   // Synchronous deduplication and abort refs
   const isSendingRef = useRef(false);
@@ -65,23 +69,80 @@ export function CoachDrawer({
   const inputRef = useRef('');
   inputRef.current = input;
 
-  // Cleanup abort controller only when user explicitly closes the drawer
+  // Auto-scroll and streaming refs
+  const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
+  const streamIntervalRef = useRef(null);
+
+  const scrollToBottom = useCallback((behavior = 'smooth') => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior, block: 'end' });
+    }
+  }, []);
+
+  // Fetch live AI engine connectivity status
+  useEffect(() => {
+    let isMounted = true;
+    fetchCoachStatus()
+      .then(st => {
+        if (isMounted) setCoachStatus(st);
+      })
+      .catch(() => {
+        if (isMounted) {
+          setCoachStatus({ status: 'local_fallback', has_live_keys: false });
+        }
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen]);
+
+  // Cleanup streaming and abort controller only when user explicitly closes the drawer
   useEffect(() => {
     if (!isOpen) {
       abortControllerRef.current?.abort();
+      if (streamIntervalRef.current) {
+        clearInterval(streamIntervalRef.current);
+        streamIntervalRef.current = null;
+      }
       isSendingRef.current = false;
       setLoading(false);
     }
   }, [isOpen]);
 
+  // Clean up streaming ticker on unmount
+  useEffect(() => {
+    return () => {
+      if (streamIntervalRef.current) {
+        clearInterval(streamIntervalRef.current);
+      }
+    };
+  }, []);
+
+  // Auto-scroll when messages update or loading state changes
+  useEffect(() => {
+    scrollToBottom('smooth');
+  }, [messages.length, loading, scrollToBottom]);
+
   const handleSend = useCallback(
-    async (textToSend) => {
-      const text = (typeof textToSend === 'string' ? textToSend : inputRef.current).trim();
-      if (!text || isSendingRef.current) return;
+    async (textToSend, options = {}) => {
+      const isDirectText = typeof textToSend === 'string';
+      const text = (isDirectText ? textToSend : inputRef.current).trim();
+      if (!text) return;
+      if (!isDirectText && isSendingRef.current) return;
+
+      // Finish any pending streaming message immediately before starting new query
+      if (streamIntervalRef.current) {
+        clearInterval(streamIntervalRef.current);
+        streamIntervalRef.current = null;
+        setMessages(prev =>
+          prev.map(m => (m.isStreaming ? { ...m, displayedContent: m.content, isStreaming: false } : m))
+        );
+      }
 
       isSendingRef.current = true;
       setLoading(true);
-      if (typeof textToSend !== 'string') {
+      if (!isDirectText) {
         setInput('');
       }
 
@@ -92,15 +153,22 @@ export function CoachDrawer({
       const userMsg = {
         id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         role: 'user',
-        content: text
+        content: text,
+        isStreaming: false
       };
       setMessages(prev => [...prev, userMsg]);
+      setTimeout(() => scrollToBottom('smooth'), 20);
+
+      const activeChart =
+        options.overrideChartContext !== undefined ? options.overrideChartContext : chartContext;
+      const activeFilter =
+        options.overrideFilterContext !== undefined ? options.overrideFilterContext : filterContext;
 
       try {
         const res = await sendCoachMessage(
           text,
-          chartContext,
-          filterContext,
+          activeChart,
+          activeFilter,
           threadId,
           controller.signal
         );
@@ -108,34 +176,74 @@ export function CoachDrawer({
           setThreadId(res.thread_id);
         }
 
+        const asstId = res.message_id || `asst-${Date.now()}`;
+        const replyText = res.reply || '';
+
         const asstMsg = {
-          id: res.message_id || `asst-${Date.now()}`,
+          id: asstId,
           role: 'assistant',
-          content: res.reply,
+          content: replyText,
+          displayedContent: '',
+          isStreaming: true,
           short_tag: res.short_tag,
           decision: res.decision,
           action_card: res.action_card,
           citations: res.citations,
           suggest_intent: res.suggest_intent
         };
+
         setMessages(prev => [...prev, asstMsg]);
+        setLoading(false);
+
+        // Progressive streaming ticker that types out the LLM response
+        // while continuously auto-scrolling smoothly so the user doesn't have to scroll
+        const stepTimeMs = 20;
+        const targetSteps = 45; // ~900ms smooth typing
+        const chunkSize = Math.max(3, Math.ceil(replyText.length / targetSteps));
+        let cursor = 0;
+
+        streamIntervalRef.current = setInterval(() => {
+          cursor += chunkSize;
+          if (cursor >= replyText.length) {
+            clearInterval(streamIntervalRef.current);
+            streamIntervalRef.current = null;
+            setMessages(prev =>
+              prev.map(m =>
+                m.id === asstId ? { ...m, displayedContent: replyText, isStreaming: false } : m
+              )
+            );
+            setTimeout(() => scrollToBottom('smooth'), 60);
+          } else {
+            const nextChunk = replyText.slice(0, cursor);
+            setMessages(prev =>
+              prev.map(m => (m.id === asstId ? { ...m, displayedContent: nextChunk } : m))
+            );
+            scrollToBottom('smooth');
+          }
+        }, stepTimeMs);
       } catch (err) {
         if (err?.name === 'AbortError') return;
+        setLoading(false);
         setMessages(prev => [
           ...prev,
           {
             id: `err-${Date.now()}`,
             role: 'assistant',
             content:
-              'Sorry, I am having trouble connecting right now. Your core Trinity firewall and balances remain safe!'
+              'Sorry, I am having trouble connecting right now. Your core Trinity firewall and balances remain safe!',
+            displayedContent:
+              'Sorry, I am having trouble connecting right now. Your core Trinity firewall and balances remain safe!',
+            isStreaming: false
           }
         ]);
+        setTimeout(() => scrollToBottom('smooth'), 40);
       } finally {
-        isSendingRef.current = false;
-        setLoading(false);
+        if (abortControllerRef.current === controller) {
+          isSendingRef.current = false;
+        }
       }
     },
-    [chartContext, filterContext, threadId]
+    [chartContext, filterContext, threadId, scrollToBottom]
   );
 
   useEffect(() => {
@@ -148,10 +256,55 @@ export function CoachDrawer({
     if (lastProcessedIdRef.current === queryId) return;
     lastProcessedIdRef.current = queryId;
 
-    handleSend(trimmed);
-  }, [isOpen, initialQuery, handleSend]);
+    const customFilterCtx =
+      typeof initialQuery === 'object' ? initialQuery?.filterContext : undefined;
+    const customChartId = typeof initialQuery === 'object' ? initialQuery?.chartId : undefined;
+
+    handleSend(trimmed, {
+      overrideFilterContext: customFilterCtx !== undefined ? customFilterCtx : filterContext,
+      overrideChartContext: customChartId !== undefined ? customChartId : chartContext
+    });
+    onClearInitialQuery?.();
+  }, [isOpen, initialQuery, handleSend, onClearInitialQuery, filterContext, chartContext]);
 
   if (!isOpen) return null;
+
+  const handleCaptureCoachOrder = async (msgId, intentId, orderId) => {
+    setExecutingMsgId(msgId);
+    try {
+      const res = await captureIntent(intentId, orderId);
+      setExecutedResults(prev => ({
+        ...prev,
+        [msgId]: {
+          ok: true,
+          data: {
+            status: 'settled',
+            message: 'PayPal payment captured & ledger settled successfully!',
+            paypal_order_id: res.paypal_order_id || orderId,
+            paypal_capture_id: res.paypal_capture_id
+          }
+        }
+      }));
+      onActionSuccess?.();
+    } catch (err) {
+      const isUnapproved = err.message?.includes('ORDER_NOT_APPROVED');
+      setExecutedResults(prev => ({
+        ...prev,
+        [msgId]: {
+          ok: true,
+          data: {
+            ...(prev[msgId]?.data || {}),
+            status: 'awaiting_approval',
+            captureError: isUnapproved
+              ? 'PayPal reports buyer approval is not finished yet. Please log into the PayPal window and click Continue/Agree first.'
+              : err.message || 'Capture failed'
+          }
+        }
+      }));
+    } finally {
+      setExecutingMsgId(null);
+    }
+  };
 
   const handleOneTapAction = async (msgId, card) => {
     if (!card || executingMsgId) return;
@@ -189,65 +342,102 @@ export function CoachDrawer({
   const contentUI = (
     <div
       className={`bg-slate-900 flex flex-col h-full ${
-        mode === 'sidebar' ? 'border-l border-slate-800' : 'w-full sm:max-w-md shadow-2xl'
+        mode === 'sidebar'
+          ? 'border-l border-slate-800'
+          : 'w-full sm:max-w-md shadow-2xl animate-drawer-slide border-l border-slate-800'
       }`}
     >
       {/* Header */}
       <div className="p-3.5 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-400">
+          <div className="w-7 h-7 rounded-lg bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-400 shadow-sm">
             <Sparkles className="w-3.5 h-3.5" />
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <h3 className="text-xs font-bold text-white tracking-tight">Unified Trinity Coach</h3>
-              {filterContext && (
-                <span className="px-1.5 py-0.2 rounded text-[10px] bg-purple-950 text-purple-300 border border-purple-800">
-                  AG Grid Synced
-                </span>
-              )}
+              <h3 className="text-xs font-bold text-white tracking-tight">Financial Coach</h3>
             </div>
-            <p className="text-[10px] text-slate-400">Llama 3.3 70B &middot; RAG Memory &middot; 1-Tap Actions</p>
+            <p className="text-[10px] text-slate-400">Financial Firewall &amp; Intelligent Guidance</p>
           </div>
         </div>
-        <button
-          onClick={onClose}
-          className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-          title="Close Coach Panel"
-        >
-          <X className="w-4 h-4" />
-        </button>
+
+        <div className="flex items-center gap-2">
+          {coachStatus && (
+            <div
+              className={`hidden sm:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-[10px] font-medium transition-colors shadow-sm ${
+                coachStatus.status === 'online'
+                  ? 'bg-emerald-950/60 border-emerald-800 text-emerald-300'
+                  : 'bg-slate-800/80 border-slate-700 text-slate-300'
+              }`}
+              title={
+                coachStatus.status === 'online'
+                  ? 'AI Engine Online & Guardrails Active'
+                  : 'Deterministic Engine Active'
+              }
+            >
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  coachStatus.status === 'online' ? 'bg-emerald-400 animate-pulse' : 'bg-slate-400'
+                }`}
+              />
+              <span className="font-semibold">
+                {coachStatus.status === 'online' ? 'AI Engine Active' : 'Deterministic Mode'}
+              </span>
+            </div>
+          )}
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            title="Close Coach Panel"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
-      {/* Message list */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3.5">
+      {/* Message list with progressive typing & auto-scroll anchor */}
+      <div
+        ref={messagesContainerRef}
+        className="flex-1 overflow-y-auto p-4 space-y-3.5 scroll-smooth"
+      >
         {messages.map(msg => {
           const card = msg.action_card;
           const execState = executedResults[msg.id];
           const isExecutingThis = executingMsgId === msg.id;
+          const displayText = msg.displayedContent !== undefined ? msg.displayedContent : msg.content;
 
           return (
             <div
               key={msg.id}
-              className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
+              className={`flex flex-col animate-message-appear ${
+                msg.role === 'user' ? 'items-end' : 'items-start'
+              }`}
             >
               <div
-                className={`max-w-[90%] p-3.5 rounded-2xl text-xs sm:text-sm leading-relaxed ${
+                className={`max-w-[90%] p-3.5 rounded-2xl text-xs sm:text-sm leading-relaxed transition-all ${
                   msg.role === 'user'
                     ? 'bg-purple-600 text-white rounded-tr-none shadow-md whitespace-pre-line'
                     : 'bg-slate-800/90 text-slate-200 border border-slate-700/60 rounded-tl-none shadow-sm'
                 }`}
               >
                 {msg.role === 'user' ? (
-                  msg.content
+                  displayText
                 ) : (
-                  <MarkdownRenderer content={msg.content} />
+                  <div>
+                    <MarkdownRenderer content={displayText} />
+                    {msg.isStreaming && (
+                      <span
+                        className="inline-block w-1.5 h-3.5 bg-purple-400 ml-1 animate-pulse align-middle rounded-sm"
+                        title="Generating response..."
+                      />
+                    )}
+                  </div>
                 )}
               </div>
 
-              {/* Citations & Recorded RAG Short-Tag Pills */}
-              {(msg.short_tag || msg.citations) && (
-                <div className="mt-1.5 flex flex-wrap gap-1.5 text-[10px]">
+              {/* Citations & Recorded RAG Short-Tag Pills (revealed when typing completes) */}
+              {!msg.isStreaming && (msg.short_tag || msg.citations) && (
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px] animate-message-appear">
                   {msg.short_tag && (
                     <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-950/80 text-indigo-300 border border-indigo-800 font-medium">
                       <Tag className="w-2.5 h-2.5 text-indigo-400" />#{msg.short_tag}
@@ -285,9 +475,9 @@ export function CoachDrawer({
                 </div>
               )}
 
-              {/* Pre-Configured 1-Tap Action Card */}
-              {card && card.action_type !== 'none' && (
-                <div className="mt-2.5 w-full max-w-[90%] p-3 rounded-xl bg-slate-950/90 border border-slate-800 space-y-2.5 shadow-md">
+              {/* Pre-Configured 1-Tap Action Card (revealed when typing completes) */}
+              {!msg.isStreaming && card && card.action_type !== 'none' && (
+                <div className="mt-2.5 w-full max-w-[90%] p-3 rounded-xl bg-slate-950/90 border border-slate-800 space-y-2.5 shadow-md animate-message-appear">
                   <div className="flex items-center justify-between text-[11px]">
                     <span className="font-bold text-slate-200 flex items-center gap-1.5">
                       {card.is_emergency ? (
@@ -325,17 +515,73 @@ export function CoachDrawer({
                   </div>
 
                   {execState?.ok ? (
-                    <div className="p-2.5 rounded-lg bg-emerald-950/60 border border-emerald-800 text-emerald-300 text-xs flex items-start gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                      <div>
-                        <div className="font-bold">{execState.data.message}</div>
-                        {execState.data.paypal_order_id && (
-                          <div className="text-[10px] text-emerald-400/80 font-mono mt-0.5">
-                            Order: {execState.data.paypal_order_id} &middot; Capture: {execState.data.paypal_capture_id}
+                    execState.data?.status === 'awaiting_approval' ? (
+                      <div className="p-3 rounded-xl bg-amber-950/60 border border-amber-800 text-amber-200 text-xs space-y-2 animate-in fade-in">
+                        <div className="flex items-center gap-1.5 font-bold text-amber-300">
+                          <ExternalLink className="w-4 h-4 text-amber-400" />
+                          <span>Approve in PayPal Sandbox</span>
+                        </div>
+                        <p className="text-[11px] text-slate-300 leading-relaxed">
+                          PayPal checkout opened in another window. Log into your Sandbox Buyer account, click "Continue" or "Agree", then complete capture.
+                        </p>
+                        {execState.data.captureError && (
+                          <div className="p-2 rounded bg-rose-950/70 border border-rose-900 text-rose-300 text-[11px]">
+                            {execState.data.captureError}
                           </div>
                         )}
+                        <div className="space-y-1.5 pt-1">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleCaptureCoachOrder(
+                                msg.id,
+                                execState.data.intent_id || card.intent_id,
+                                execState.data.paypal_order_id
+                              )
+                            }
+                            disabled={isExecutingThis}
+                            className="w-full py-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-extrabold rounded-lg text-xs flex items-center justify-center gap-1.5 transition-all shadow disabled:opacity-50"
+                          >
+                            {isExecutingThis ? (
+                              <>
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                <span>Verifying Completion with PayPal...</span>
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                <span>I've Approved on PayPal — Complete &amp; Settle</span>
+                              </>
+                            )}
+                          </button>
+                          {execState.data.approval_url && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                window.open(execState.data.approval_url, '_blank', 'noopener,noreferrer')
+                              }
+                              className="w-full py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-[11px] flex items-center justify-center gap-1 transition-colors"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                              <span>Reopen PayPal Window</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      <div className="p-2.5 rounded-lg bg-emerald-950/60 border border-emerald-800 text-emerald-300 text-xs flex items-start gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                        <div>
+                          <div className="font-bold">{execState.data.message}</div>
+                          {execState.data.paypal_order_id && (
+                            <div className="text-[10px] text-emerald-400/80 font-mono mt-0.5">
+                              Order: {execState.data.paypal_order_id}
+                              {execState.data.paypal_capture_id && ` · Capture: ${execState.data.paypal_capture_id}`}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )
                   ) : (
                     <>
                       {execState?.error && (
@@ -378,15 +624,26 @@ export function CoachDrawer({
         })}
 
         {loading && (
-          <div className="flex items-center gap-2 text-xs text-purple-400 p-2.5 bg-purple-950/30 border border-purple-900/40 rounded-xl">
-            <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-            <span>Evaluating Trinity rules, RAG tags, and 1-tap action metadata...</span>
+          <div className="flex items-center gap-2 text-xs text-purple-300 p-2.5 bg-purple-950/40 border border-purple-900/50 rounded-xl animate-message-appear">
+            <Loader2 className="w-4 h-4 animate-spin shrink-0 text-purple-400" />
+            <span>Analyzing balances and generating advice...</span>
           </div>
         )}
+
+        {/* Dynamic auto-scroll anchor */}
+        <div ref={messagesEndRef} className="h-0 w-0" />
       </div>
 
       {/* Quick Insight Suggestion Chips */}
       <div className="px-3 py-2 border-t border-slate-800/80 bg-slate-900/60 flex items-center gap-1.5 overflow-x-auto scrollbar-none">
+        <button
+          type="button"
+          onClick={() => handleSend('Explain my Bank double-entry flows and where income moved.')}
+          disabled={loading}
+          className="text-[11px] px-2.5 py-1 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 rounded-full text-slate-300 whitespace-nowrap transition-colors flex items-center gap-1 shrink-0 disabled:opacity-50"
+        >
+          <span>🏦 Bank double-entry flows</span>
+        </button>
         <button
           type="button"
           onClick={() => handleSend('Explain how my rollover streak works and how unspent Daily funds roll over.')}
@@ -470,7 +727,14 @@ export function CoachDrawer({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex justify-end animate-in fade-in">
+    <div
+      className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex justify-end animate-backdrop-fade"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose?.();
+        }
+      }}
+    >
       {contentUI}
     </div>
   );

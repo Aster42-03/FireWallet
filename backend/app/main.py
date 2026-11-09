@@ -25,6 +25,8 @@ from app.api.v1.stats import router as stats_router
 from app.api.v1.analytics import router as analytics_router
 from app.api.v1.coach import router as coach_router
 from app.api.v1.webhooks import router as webhooks_router
+from app.api.v1.paypal import router as paypal_router
+from app.api.v1.partner import router as partner_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -66,6 +68,8 @@ app.include_router(stats_router, prefix=prefix)
 app.include_router(analytics_router, prefix=prefix)
 app.include_router(coach_router, prefix=prefix)
 app.include_router(webhooks_router, prefix=prefix)
+app.include_router(paypal_router, prefix=prefix)
+app.include_router(partner_router, prefix=prefix)
 
 @app.get("/health", tags=["System"])
 async def health_check():

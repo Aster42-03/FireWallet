@@ -59,9 +59,12 @@ export async function fetchIntentTags() {
   return res.json();
 }
 
-export async function executeIntent(intentId) {
+export async function executeIntent(intentId, returnUrl = null) {
+  const body = returnUrl ? { return_url: returnUrl } : {};
   const res = await fetch(`${API_BASE}/intents/${intentId}/execute`, {
-    method: 'POST'
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -70,13 +73,28 @@ export async function executeIntent(intentId) {
   return res.json();
 }
 
-export async function captureIntent(intentId, paypalOrderId) {
+export async function getIntentOrderStatus(intentId) {
+  const res = await fetch(`${API_BASE}/intents/${intentId}/order-status`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to fetch PayPal order status');
+  }
+  return res.json();
+}
+
+export async function captureIntent(intentId, paypalOrderId, payerId = null) {
+  const payload = { paypal_order_id: paypalOrderId };
+  if (payerId) payload.payer_id = payerId;
+
   const res = await fetch(`${API_BASE}/intents/${intentId}/capture`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ paypal_order_id: paypalOrderId })
+    body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error('Failed to capture PayPal order');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to capture PayPal order');
+  }
   return res.json();
 }
 
@@ -151,6 +169,78 @@ export async function executeCoachAction(actionCard, autoCaptureDemo = true) {
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || 'Failed to execute 1-tap Coach action');
+  }
+  return res.json();
+}
+
+export async function fetchCoachStatus() {
+  const res = await fetch(`${API_BASE}/coach/status`);
+  if (!res.ok) throw new Error('Failed to fetch coach status');
+  return res.json();
+}
+
+export async function fetchPayPalBalance() {
+  const res = await fetch(`${API_BASE}/paypal/balance`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to detect PayPal balance');
+  }
+  return res.json();
+}
+
+export async function syncPayPalBalance(overrideBalanceCents = null) {
+  const payload =
+    overrideBalanceCents !== null ? { override_balance_cents: overrideBalanceCents } : {};
+  const res = await fetch(`${API_BASE}/paypal/sync-balance`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to sync PayPal balance');
+  }
+  return res.json();
+}
+
+export async function fetchPolicy() {
+  const res = await fetch(`${API_BASE}/me/policy`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to load policy');
+  }
+  return res.json();
+}
+
+/**
+ * Update budget policy envelopes and rules (including daily_amount, freedom_monthly_amount, bills_monthly_amount, vault_skim_bps).
+ */
+export async function updatePolicy(policyUpdates) {
+  const res = await fetch(`${API_BASE}/me/policy`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(policyUpdates)
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to update bucket policy');
+  }
+  return res.json();
+}
+
+/**
+ * Stage an evaluated Intent or recurring obligation into the Batch Dispatcher staging queue.
+ * @param {Object} data - { intent_id, recipient_email, amount_cents, currency, category, source_bucket, note }
+ */
+export async function stageIntentToBatch(data) {
+  const res = await fetch(`${API_BASE}/bills/batch-dispatcher/stage-intent`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to stage payment in Batch Dispatcher');
   }
   return res.json();
 }

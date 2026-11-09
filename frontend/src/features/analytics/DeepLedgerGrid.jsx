@@ -118,12 +118,23 @@ export default function DeepLedgerGrid({
   };
 
   const handleAnalyzeContext = (customPrompt = null) => {
+    const serializedSelected =
+      selectedRows.length > 0
+        ? selectedRows.map(r => ({
+            id: r.id,
+            utterance: r.utterance || r.memo || 'Transaction',
+            amount: r.amount,
+            bucket: r.bucket,
+            entry_kind: r.entry_kind
+          }))
+        : null;
+
     const filterContext = {
       view_mode: viewMode,
       bucket: bucketFilter !== 'all' ? bucketFilter : null,
       state: stateFilter !== 'all' ? stateFilter : null,
       entry_kind: entryKindFilter !== 'all' ? entryKindFilter : null,
-      selected_rows: selectedRows.length > 0 ? selectedRows : null,
+      selected_rows: serializedSelected,
       total_shown: displayedRows.length
     };
 
@@ -366,12 +377,9 @@ export default function DeepLedgerGrid({
         <div>
           <div className="flex items-center gap-2.5">
             <span className="w-2.5 h-2.5 rounded-full bg-purple-500"></span>
-            <h2 className="text-2xl font-black text-white tracking-tight">
-              Advanced Ledger & Deep Audit Workbench
+            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+              Double-Entry Ledger &amp; Audit Workbench
             </h2>
-            <span className="px-2.5 py-0.5 rounded-full bg-purple-950 text-purple-300 border border-purple-800 text-[11px] font-bold">
-              AG Grid Enterprise Layer
-            </span>
           </div>
           <p className="text-xs text-slate-400 mt-1">
             Bank-anchored double-entry transaction verification, zero-sum reconciliation, and real-time velocity interrogation.
@@ -381,7 +389,7 @@ export default function DeepLedgerGrid({
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={handleExportCSV}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 rounded-xl border border-slate-700 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 rounded-xl border border-slate-700 transition-colors"
           >
             <Download className="w-3.5 h-3.5" />
             <span>Export CSV</span>
@@ -398,7 +406,7 @@ export default function DeepLedgerGrid({
 
           <button
             onClick={() => handleAnalyzeContext()}
-            className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-xs font-bold text-white rounded-xl shadow-lg shadow-purple-600/20 transition-all"
+            className="flex items-center gap-1.5 px-3.5 sm:px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-xs font-bold text-white rounded-xl shadow-lg shadow-purple-600/20 transition-all"
           >
             <Sparkles className="w-4 h-4" />
             <span>
@@ -409,7 +417,7 @@ export default function DeepLedgerGrid({
       </div>
 
       {/* KPI & Double-Entry Health Telemetry Strip */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
         {/* Card 1: Zero-Sum Health */}
         <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 relative overflow-hidden">
           <div className="flex items-center justify-between text-xs text-slate-400 font-semibold uppercase tracking-wider">
@@ -475,10 +483,10 @@ export default function DeepLedgerGrid({
       {/* View Mode Tabs & Granular Filters */}
       <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-slate-900/80 p-3 rounded-2xl border border-slate-800">
         {/* Journal Mode Switcher */}
-        <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
+        <div className="flex items-center overflow-x-auto bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs scrollbar-none">
           <button
             onClick={() => setViewMode('all')}
-            className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+            className={`whitespace-nowrap px-3 py-1.5 rounded-lg font-medium transition-all ${
               viewMode === 'all'
                 ? 'bg-purple-600 text-white font-bold shadow-sm'
                 : 'text-slate-400 hover:text-white'
@@ -488,7 +496,7 @@ export default function DeepLedgerGrid({
           </button>
           <button
             onClick={() => setViewMode('merchant')}
-            className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+            className={`whitespace-nowrap px-3 py-1.5 rounded-lg font-medium transition-all ${
               viewMode === 'merchant'
                 ? 'bg-purple-600 text-white font-bold shadow-sm'
                 : 'text-slate-400 hover:text-white'
@@ -498,7 +506,7 @@ export default function DeepLedgerGrid({
           </button>
           <button
             onClick={() => setViewMode('internal')}
-            className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+            className={`whitespace-nowrap px-3 py-1.5 rounded-lg font-medium transition-all ${
               viewMode === 'internal'
                 ? 'bg-purple-600 text-white font-bold shadow-sm'
                 : 'text-slate-400 hover:text-white'
@@ -514,7 +522,7 @@ export default function DeepLedgerGrid({
           <select
             value={bucketFilter}
             onChange={(e) => setBucketFilter(e.target.value)}
-            className="bg-slate-950 border border-slate-700 text-xs text-slate-200 rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-purple-500"
+            className="flex-1 sm:flex-initial bg-slate-950 border border-slate-700 text-xs text-slate-200 rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-purple-500"
           >
             <option value="all">All Buckets</option>
             <option value="bank">Bank Foundation</option>
@@ -528,7 +536,7 @@ export default function DeepLedgerGrid({
           <select
             value={stateFilter}
             onChange={(e) => setStateFilter(e.target.value)}
-            className="bg-slate-950 border border-slate-700 text-xs text-slate-200 rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-purple-500"
+            className="flex-1 sm:flex-initial bg-slate-950 border border-slate-700 text-xs text-slate-200 rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-purple-500"
           >
             <option value="all">All States</option>
             <option value="posted">Posted (Settled)</option>
@@ -537,7 +545,7 @@ export default function DeepLedgerGrid({
           </select>
 
           {/* Quick Filter Search */}
-          <div className="relative w-full sm:w-56">
+          <div className="relative w-full sm:w-52">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
@@ -584,7 +592,7 @@ export default function DeepLedgerGrid({
 
       {/* AG Grid Component */}
       <div className="bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
-        <div className="ag-theme-quartz-dark w-full h-[620px]">
+        <div className="ag-theme-quartz-dark w-full h-[520px] sm:h-[600px] lg:h-[680px]">
           <AgGridReact
             ref={gridRef}
             rowData={displayedRows}

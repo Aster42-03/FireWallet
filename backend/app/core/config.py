@@ -59,12 +59,12 @@ class Settings(BaseSettings):
     PAYPAL_VAULT_RECEIVER_EMAIL: str = "vault-receiver@sandbox.paypal.com"
     PAYPAL_BILL_PAYEE_EMAIL: str = "landlord@sandbox.paypal.com"
     
-    # Groq Primary LLM Service (Ultra-fast Llama 3.3 70B Versatile for Monolithic CoachDecision)
+    # Groq Primary LLM Service (High-Performance LLM for Monolithic CoachDecision)
     GROQ_API_KEY: str = ""
     GROQ_BASE_URL: str = "https://api.groq.com/openai/v1"
-    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+    GROQ_MODEL: str = "openai/gpt-oss-120b"
 
-    # Secondary LLM Fallback Service (OpenAI-compatible inference endpoint: gpt-4o-mini)
+    # Secondary LLM Fallback Service (OpenAI-compatible inference endpoint)
     LLM_BASE_URL: str = "https://api.openai.com/v1"
     LLM_API_KEY: str = ""
     LLM_MODEL: str = "gpt-4o-mini"

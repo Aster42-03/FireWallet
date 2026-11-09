@@ -31,3 +31,74 @@ body {
   background: #334155;
   border-radius: 3px;
 }
+
+/* Coach Drawer & Chat Animation Primitives */
+@keyframes drawerSlideIn {
+  0% {
+    transform: translateX(100%);
+    opacity: 0.6;
+  }
+  100% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes backdropFadeIn {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes messageAppear {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes cursorBlink {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+.animate-drawer-slide {
+  animation: drawerSlideIn 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity;
+}
+
+.animate-backdrop-fade {
+  animation: backdropFadeIn 0.25s ease-out forwards;
+}
+
+.animate-message-appear {
+  animation: messageAppear 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-cursor-blink {
+  animation: cursorBlink 0.8s infinite;
+}
+
+/* AG Grid mobile pagination wrap fix */
+.ag-theme-quartz-dark .ag-paging-panel {
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: center;
+  padding: 6px 8px;
+}
+
+.ag-theme-quartz-dark .ag-paging-row-summary-panel {
+  white-space: nowrap;
+}
+

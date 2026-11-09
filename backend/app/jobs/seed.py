@@ -1,4 +1,6 @@
 import asyncio
+import os
+import sys
 from datetime import datetime, timezone, date, timedelta
 from uuid import uuid4
 from sqlmodel import select
@@ -9,8 +11,10 @@ from app.models.bucket import Bucket
 from app.models.ledger import LedgerEntry
 from app.models.bill import Bill
 from app.models.intent import Intent
+from app.ledger.engine import LedgerEngine
+from app.services.paypal_client import paypal_client
 
-async def seed_demo_data():
+async def seed_demo_data(include_demo_transactions: bool = False):
     print("Initializing database...")
     await init_db()
 
@@ -22,10 +26,10 @@ async def seed_demo_data():
             print("Database already contains seed data. Skipping.")
             return
 
-        print("Seeding demo user Aster...")
+        print("Seeding user Aster...")
         user = User(
             email="demo-user@sandbox.paypal.com",
-            display_name="Aster (Demo)",
+            display_name="Aster",
             timezone="America/New_York"
         )
         session.add(user)
@@ -61,6 +65,17 @@ async def seed_demo_data():
             await session.commit()
             await session.refresh(b)
             buckets[kind] = b
+
+        if not include_demo_transactions:
+            print("Syncing actual PayPal account balance (clean slate)...")
+            bal = await paypal_client.get_account_balance(currency="USD")
+            await LedgerEngine.sync_and_allocate_buckets(
+                session=session,
+                user_id=user.id,
+                target_total_cents=bal["available_cents"],
+            )
+            print(f"Clean slate initialized! Synced ${bal['available_cents'] / 100:.2f} across Trinity buckets.")
+            return
 
         # Initial Balances (Bank-Kept Double-Entry Ledger System)
         now = datetime.now(timezone.utc)
@@ -390,4 +405,5 @@ async def seed_demo_data():
     await engine.dispose()
 
 if __name__ == "__main__":
-    asyncio.run(seed_demo_data())
+    use_demo = "--demo" in sys.argv or os.getenv("SEED_DEMO_DATA", "false").lower() == "true"
+    asyncio.run(seed_demo_data(include_demo_transactions=use_demo))

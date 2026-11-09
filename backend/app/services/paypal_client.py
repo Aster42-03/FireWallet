@@ -40,6 +40,17 @@ class PayPalClient:
         self._token_expiry: Optional[datetime] = None
         self._lock = asyncio.Lock()
 
+    def has_live_credentials(self) -> bool:
+        """
+        Check if genuine live PayPal Sandbox credentials are configured.
+        Returns False if unconfigured, placeholder, or empty.
+        """
+        if not self.client_id or not self.client_secret:
+            return False
+        if self.client_id in ("mock_client_id", "dummy_client_id", "mock_sandbox_access_token", ""):
+            return False
+        return True
+
     @staticmethod
     def format_cents_to_paypal(cents: int) -> str:
         """
@@ -49,6 +60,23 @@ class PayPalClient:
         dollars = abs(cents) // 100
         cents_rem = abs(cents) % 100
         return f"{dollars}.{cents_rem:02d}"
+
+    @staticmethod
+    def parse_paypal_to_cents(value_str: str) -> int:
+        """
+        Convert a PayPal decimal string (e.g. '2450.75') to minor integer units (cents)
+        strictly without floating-point arithmetic.
+        """
+        cleaned = (value_str or "0.00").strip()
+        sign = -1 if cleaned.startswith("-") else 1
+        cleaned = cleaned.lstrip("+-")
+        parts = cleaned.split(".")
+        dollars = int(parts[0]) if parts[0].isdigit() else 0
+        cents = 0
+        if len(parts) > 1:
+            frac = (parts[1] + "00")[:2]
+            cents = int(frac) if frac.isdigit() else 0
+        return sign * (dollars * 100 + cents)
 
     async def get_access_token(self) -> str:
         """
@@ -106,12 +134,17 @@ class PayPalClient:
         intent_id: str,
         amount_cents: int,
         description: str,
-        return_url: str = "http://localhost:5173/pay/return",
-        cancel_url: str = "http://localhost:5173/pay/cancel"
+        return_url: Optional[str] = None,
+        cancel_url: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Create a PayPal Orders v2 CAPTURE order with idempotency.
         """
+        if not return_url:
+            return_url = f"http://localhost:5173/?paypal_return=true&intent_id={intent_id}"
+        if not cancel_url:
+            cancel_url = f"http://localhost:5173/?paypal_cancel=true&intent_id={intent_id}"
+
         token = await self.get_access_token()
         
         # Offline sandbox fallback if simulated
@@ -145,7 +178,7 @@ class PayPalClient:
             ],
             "application_context": {
                 "brand_name": "FireWallet",
-                "landing_page": "BILLING",
+                "landing_page": "LOGIN",
                 "user_action": "PAY_NOW",
                 "return_url": return_url,
                 "cancel_url": cancel_url
@@ -157,7 +190,7 @@ class PayPalClient:
                 res = await client.post(f"{self.base_url}/v2/checkout/orders", headers=headers, json=payload)
                 if res.status_code not in (200, 201):
                     logger.error(f"PayPal Create Order error: {res.text}")
-                    if settings.PAYPAL_ENV == "sandbox":
+                    if settings.PAYPAL_ENV == "sandbox" and not self.has_live_credentials():
                         return {
                             "id": f"ORDER-MOCK-{intent_id[:8]}",
                             "status": "CREATED",
@@ -169,7 +202,7 @@ class PayPalClient:
                 return res.json()
         except httpx.RequestError as e:
             logger.warning(f"Network error creating PayPal order: {e}")
-            if settings.PAYPAL_ENV == "sandbox":
+            if settings.PAYPAL_ENV == "sandbox" and not self.has_live_credentials():
                 return {
                     "id": f"ORDER-MOCK-{intent_id[:8]}",
                     "status": "CREATED",
@@ -179,9 +212,38 @@ class PayPalClient:
                 }
             raise
 
+    async def get_order(self, order_id: str) -> Dict[str, Any]:
+        """
+        Fetch details and approval status for a PayPal Orders v2 order.
+        GET /v2/checkout/orders/{order_id}
+        """
+        token = await self.get_access_token()
+        if token == "mock_sandbox_access_token":
+            return {
+                "id": order_id,
+                "status": "APPROVED",
+                "intent": "CAPTURE",
+            }
+
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        }
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                res = await client.get(f"{self.base_url}/v2/checkout/orders/{order_id}", headers=headers)
+                if res.status_code != 200:
+                    logger.error(f"PayPal Get Order error ({res.status_code}): {res.text}")
+                    raise RuntimeError(f"PayPal Get Order failed ({res.status_code}): {res.text}")
+                return res.json()
+        except httpx.RequestError as e:
+            logger.warning(f"Network error fetching PayPal order {order_id}: {e}")
+            raise
+
     async def capture_order(self, order_id: str, intent_id: str) -> Dict[str, Any]:
         """
         Capture an approved PayPal Order v2.
+        Only succeeds if the payer has approved the Order on PayPal checkout.
         """
         token = await self.get_access_token()
 
@@ -208,35 +270,37 @@ class PayPalClient:
             async with httpx.AsyncClient(timeout=15.0) as client:
                 res = await client.post(f"{self.base_url}/v2/checkout/orders/{order_id}/capture", headers=headers)
                 if res.status_code not in (200, 201):
-                    logger.error(f"PayPal Capture Order error: {res.text}")
-                    if settings.PAYPAL_ENV == "sandbox":
-                        return {
-                            "id": order_id,
-                            "status": "COMPLETED",
-                            "purchase_units": [
-                                {
-                                    "payments": {
-                                        "captures": [{"id": f"CAPTURE-MOCK-{intent_id[:8]}", "status": "COMPLETED"}]
+                    logger.error(f"PayPal Capture Order error ({res.status_code}): {res.text}")
+                    err_text = res.text
+                    try:
+                        err_json = res.json()
+                        issues = [d.get("issue", "") for d in err_json.get("details", [])]
+                        if "ORDER_NOT_APPROVED" in issues:
+                            raise ValueError(
+                                "ORDER_NOT_APPROVED: Payer has not yet approved the Order on PayPal checkout. "
+                                "Please log in with your Sandbox Personal Buyer account and click Agree/Continue before capturing."
+                            )
+                        elif "ORDER_ALREADY_CAPTURED" in issues:
+                            return {
+                                "id": order_id,
+                                "status": "COMPLETED",
+                                "purchase_units": [
+                                    {
+                                        "payments": {
+                                            "captures": [{"id": f"CAPTURE-PREV-{intent_id[:8]}", "status": "COMPLETED"}]
+                                        }
                                     }
-                                }
-                            ]
-                        }
-                    raise RuntimeError(f"PayPal Capture Order failed: {res.text}")
+                                ]
+                            }
+                        err_text = err_json.get("message", res.text)
+                    except ValueError:
+                        raise
+                    except Exception:
+                        pass
+                    raise RuntimeError(f"PayPal Capture Order failed ({res.status_code}): {err_text}")
                 return res.json()
         except httpx.RequestError as e:
             logger.warning(f"Network error capturing PayPal order: {e}")
-            if settings.PAYPAL_ENV == "sandbox":
-                return {
-                    "id": order_id,
-                    "status": "COMPLETED",
-                    "purchase_units": [
-                        {
-                            "payments": {
-                                "captures": [{"id": f"CAPTURE-MOCK-{intent_id[:8]}", "status": "COMPLETED"}]
-                            }
-                        }
-                    ]
-                }
             raise
 
     async def create_payout(
@@ -244,7 +308,7 @@ class PayPalClient:
         batch_id: str,
         receiver_email: str,
         amount_cents: int,
-        note: str
+        note: str = ""
     ) -> Dict[str, Any]:
         """
         Dispatch a single Payout item (Vault skim or Bill pay) via PayPal Payouts API.
@@ -393,6 +457,85 @@ class PayPalClient:
             if settings.PAYPAL_ENV == "sandbox":
                 return True
             return False
+
+    async def get_account_balance(self, currency: str = "USD") -> Dict[str, Any]:
+        """
+        Query the PayPal Sandbox Reporting API (`GET /v1/reporting/balances`)
+        to detect the user's actual liquid PayPal account balance.
+        """
+        now_iso = datetime.now(timezone.utc).isoformat()
+        token = await self.get_access_token()
+
+        if token == "mock_sandbox_access_token":
+            return {
+                "currency": currency,
+                "available_cents": 250000,
+                "total_cents": 250000,
+                "withheld_cents": 0,
+                "source": "sandbox_simulated",
+                "as_of": now_iso,
+            }
+
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=12.0) as client:
+                res = await client.get(
+                    f"{self.base_url}/v1/reporting/balances",
+                    params={"currency_code": currency},
+                    headers=headers,
+                )
+                if res.status_code != 200:
+                    logger.warning(
+                        f"PayPal Reporting Balances API returned {res.status_code}: {res.text}. "
+                        "Falling back to sandbox balance."
+                    )
+                    if settings.PAYPAL_ENV == "sandbox":
+                        return {
+                            "currency": currency,
+                            "available_cents": 250000,
+                            "total_cents": 250000,
+                            "withheld_cents": 0,
+                            "source": "sandbox_simulated",
+                            "as_of": now_iso,
+                        }
+                    raise RuntimeError(f"PayPal Reporting Balances failed: {res.text}")
+
+                data = res.json()
+                balances_list = data.get("balances") or []
+                matched = next(
+                    (b for b in balances_list if b.get("currency") == currency),
+                    balances_list[0] if balances_list else {},
+                )
+
+                avail_str = (matched.get("available_balance") or {}).get("value", "0.00")
+                total_str = (matched.get("total_balance") or {}).get("value", avail_str)
+                withheld_str = (matched.get("withheld_balance") or {}).get("value", "0.00")
+
+                return {
+                    "currency": matched.get("currency", currency),
+                    "available_cents": self.parse_paypal_to_cents(avail_str),
+                    "total_cents": self.parse_paypal_to_cents(total_str),
+                    "withheld_cents": self.parse_paypal_to_cents(withheld_str),
+                    "source": "paypal_sandbox",
+                    "as_of": data.get("as_of_time") or now_iso,
+                }
+        except httpx.RequestError as e:
+            logger.warning(f"Network error querying PayPal Reporting Balances: {e}")
+            if settings.PAYPAL_ENV == "sandbox":
+                return {
+                    "currency": currency,
+                    "available_cents": 250000,
+                    "total_cents": 250000,
+                    "withheld_cents": 0,
+                    "source": "sandbox_simulated",
+                    "as_of": now_iso,
+                }
+            raise
+
 
 # Singleton client instance
 paypal_client = PayPalClient()

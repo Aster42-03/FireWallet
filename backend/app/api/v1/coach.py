@@ -29,10 +29,26 @@ from app.schemas.common import (
 from app.api.v1.auth import get_current_user
 from app.agents.insights.coach import handle_coach_query
 from app.agents.rag import normalize_short_tag
+from app.agents.shared.llm_client import llm_client
 from app.ledger.engine import LedgerEngine
 from app.services.paypal_client import paypal_client
 
 router = APIRouter(prefix="/coach", tags=["Financial Coach"])
+
+
+@router.get("/status")
+async def get_coach_status():
+    """Returns active LLM provider, configured model, and live connectivity status."""
+    providers = llm_client.get_provider_chain()
+    is_live = bool(providers)
+    active_m = llm_client.model or (providers[0][3] if providers else "offline-heuristic")
+    active_prov = llm_client.active_provider or (providers[0][0] if providers else "local_fallback")
+    return {
+        "status": "online" if is_live else "local_fallback",
+        "provider": active_prov,
+        "model": active_m,
+        "has_live_keys": is_live,
+    }
 
 
 @router.post("/messages", response_model=CoachMessageResponse)
@@ -127,6 +143,44 @@ async def execute_coach_action(
         }
 
     # --------------------------------------------------------------------------
+    # Action 2: 1-Tap Stage to Batch Dispatcher (`stage_batch`)
+    # --------------------------------------------------------------------------
+    if body.action_type == "stage_batch":
+        from app.models.batch_payment import BatchPaymentItem
+        cat = (body.category or "bills").capitalize()
+        recipient_email = body.merchant_name if (body.merchant_name and "@" in body.merchant_name) else "billing@service.com"
+        title = short_tag.title() if short_tag and short_tag != "general spend" else (body.merchant_name or f"{cat} Payment")
+
+        batch_item = BatchPaymentItem(
+            user_id=user.id,
+            intent_id=body.intent_id,
+            title=title,
+            recipient_name=title,
+            amount_minor=body.amount_cents,
+            category=cat,
+            currency=body.currency or "USD",
+            source_bucket="bills",
+            status="pending_approval",
+            recommended=True,
+            recipient_email=recipient_email,
+            payee_email=recipient_email,
+            note=body.utterance[:120],
+        )
+        session.add(batch_item)
+        await session.commit()
+        await session.refresh(batch_item)
+
+        return {
+            "status": "staged",
+            "action_type": "stage_batch",
+            "short_tag": short_tag,
+            "amount_cents": body.amount_cents,
+            "source_bucket": "bills",
+            "intent_id": body.intent_id,
+            "message": f"Payment of ${body.amount_cents / 100:.2f} staged in Batch Dispatcher.",
+        }
+
+    # --------------------------------------------------------------------------
     # Action 2: 1-Tap PayPal Sandbox Checkout (`paypal_checkout`)
     # --------------------------------------------------------------------------
     if body.action_type == "paypal_checkout":
@@ -135,7 +189,7 @@ async def execute_coach_action(
             stmt_i = select(Intent).where(Intent.id == body.intent_id).where(Intent.user_id == user.id)
             intent = (await session.exec(stmt_i)).first()
 
-        target_kind = body.target_bucket if body.target_bucket in ("daily", "freedom", "bills", "bank") else "freedom"
+        target_kind = body.target_bucket if body.target_bucket in ("daily", "freedom", "bills", "bank", "vault") else "freedom"
         necessity = body.necessity or ("freedom" if target_kind == "freedom" else "daily_living")
 
         if not intent:
@@ -145,6 +199,7 @@ async def execute_coach_action(
                 amount_minor=body.amount_cents,
                 source_kind=target_kind,
                 necessity=necessity,
+                is_emergency=body.is_emergency,
             )
             if not is_ok:
                 raise HTTPException(status_code=409, detail=pol_rationale)
@@ -174,10 +229,47 @@ async def execute_coach_action(
                     detail=f"Intent is in status '{intent.status}' and requires Escape Window override before PayPal checkout.",
                 )
 
-        # Resolve hold bucket (if override_approved and target bucket < amount, draw from bank)
+        # Resolve hold bucket
         hold_bucket_id = intent.source_bucket_id
         resolved_source_kind = intent.recommended_bucket or target_kind
-        if intent.status == "override_approved":
+
+        is_vault_draw = (
+            body.is_emergency
+            or (intent and intent.is_emergency)
+            or resolved_source_kind == "vault"
+            or target_kind == "vault"
+        )
+
+        if is_vault_draw:
+            vault_info = balances.get("vault", {})
+            bank_info = balances.get("bank", {})
+            if not vault_info or not bank_info:
+                raise HTTPException(status_code=400, detail="Vault or Bank bucket not found")
+            vault_avail = vault_info.get("available", 0)
+            bank_avail = bank_info.get("available", 0)
+            total_avail = vault_avail + bank_avail
+            if total_avail < intent.amount:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Insufficient emergency reserves across Vault (${vault_avail / 100:.2f}) and Bank Foundation (${bank_avail / 100:.2f}) for ${intent.amount / 100:.2f}."
+                )
+            if vault_avail < intent.amount:
+                cascade_amount = intent.amount - vault_avail
+                await LedgerEngine.record_double_entry_transfer(
+                    session=session,
+                    user_id=user.id,
+                    from_bucket_id=bank_info["bucket_id"],
+                    to_bucket_id=vault_info["bucket_id"],
+                    amount_minor=cascade_amount,
+                    entry_kind="emergency_vault_draw",
+                    memo=f"Emergency Cascade from Bank to Vault ({short_tag})",
+                    from_bucket_kind="bank",
+                    to_bucket_kind="vault",
+                )
+            hold_bucket_id = vault_info["bucket_id"]
+            intent.source_bucket_id = hold_bucket_id
+            resolved_source_kind = "vault"
+        elif intent.status == "override_approved":
             cur_avail = 0
             for k, b_info in balances.items():
                 if b_info["bucket_id"] == hold_bucket_id:
@@ -197,13 +289,14 @@ async def execute_coach_action(
             hold_bucket_id = b_obj.id
             intent.source_bucket_id = hold_bucket_id
 
+        hold_memo = f"[EMERGENCY VAULT DRAW] {short_tag}" if is_vault_draw else f"{short_tag}: {intent.utterance[:50]}"
         await LedgerEngine.place_hold(
             session=session,
             user_id=user.id,
             bucket_id=hold_bucket_id,
             amount_minor=intent.amount,
             intent_id=intent.id,
-            memo=f"{short_tag}: {intent.utterance[:50]}",
+            memo=hold_memo,
         )
 
         order_res = await paypal_client.create_order(
@@ -220,7 +313,8 @@ async def execute_coach_action(
         intent.paypal_order_id = order_id
         intent.short_tag = intent.short_tag or short_tag
 
-        if body.auto_capture_demo:
+        token = await paypal_client.get_access_token()
+        if body.auto_capture_demo and (token == "mock_sandbox_access_token" or not paypal_client.has_live_credentials()):
             cap_res = await paypal_client.capture_order(order_id=order_id, intent_id=str(intent.id))
             capture_id = f"CAPTURE-{order_id[:8]}"
             try:
@@ -250,7 +344,7 @@ async def execute_coach_action(
         session.add(intent)
         await session.commit()
         return {
-            "status": "executing",
+            "status": "awaiting_approval",
             "action_type": "paypal_checkout",
             "short_tag": intent.short_tag,
             "amount_cents": intent.amount,
@@ -258,7 +352,7 @@ async def execute_coach_action(
             "intent_id": intent.id,
             "paypal_order_id": order_id,
             "approval_url": approval_url,
-            "message": f"PayPal order {order_id} created. Complete approval to settle.",
+            "message": f"Created PayPal Order {order_id}. Please log into Sandbox Buyer checkout and approve.",
         }
 
     raise HTTPException(status_code=400, detail=f"Unsupported action_type '{body.action_type}'")

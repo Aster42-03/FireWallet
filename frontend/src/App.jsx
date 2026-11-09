@@ -1,27 +1,34 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Smartphone, LayoutGrid, Sparkles } from 'lucide-react';
+import { Smartphone, LayoutGrid, Sparkles, CheckCircle2, AlertTriangle, Loader2, X } from 'lucide-react';
 import MobileHUD from './features/hud/MobileHUD';
+import BucketConfigModal from './features/hud/BucketConfigModal';
 import QuickIntentModal from './features/intent/QuickIntentModal';
 import EscapeWindowModal from './features/override/EscapeWindowModal';
+import BatchDispatcherModal from './features/bills/BatchDispatcherModal';
 import { CoachDrawer } from './features/coach/CoachDrawer';
 import DeepLedgerGrid from './features/analytics/DeepLedgerGrid';
-import { fetchBuckets, fetchStatsSummary } from './shared/api';
+import { fetchBuckets, fetchStatsSummary, captureIntent } from './shared/api';
 
 export default function App() {
   const [view, setView] = useState('hud'); // 'hud' or 'deep-ledger'
   const [buckets, setBuckets] = useState([
-    { kind: 'bank', name: 'Bank', available: 80000 },
-    { kind: 'daily', name: 'Daily Allowance', available: 5200 },
-    { kind: 'freedom', name: 'Freedom', available: 9000 },
-    { kind: 'vault', name: 'Vault', available: 20000 },
-    { kind: 'bills', name: 'Bills', available: 120000 }
+    { kind: 'bank', name: 'Bank Foundation', available: 0 },
+    { kind: 'daily', name: 'Daily', available: 0 },
+    { kind: 'freedom', name: 'Freedom', available: 0 },
+    { kind: 'vault', name: 'Vault', available: 0 },
+    { kind: 'bills', name: 'Reserved Bills', available: 0 }
   ]);
   const [stats, setStats] = useState(null);
   const [ledgerRefreshTick, setLedgerRefreshTick] = useState(0);
 
+  // PayPal redirect outcome banner
+  const [paypalNotice, setPaypalNotice] = useState(null);
+
   // Modals state
   const [isIntentOpen, setIsIntentOpen] = useState(false);
+  const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [isOverrideOpen, setIsOverrideOpen] = useState(false);
+  const [isBatchDispatcherOpen, setIsBatchDispatcherOpen] = useState(false);
   const [activeOverrideIntentId, setActiveOverrideIntentId] = useState(null);
 
   // Coach Drawer state
@@ -44,6 +51,60 @@ export default function App() {
 
   useEffect(() => {
     loadData();
+  }, [loadData]);
+
+  // PayPal Redirect Return & Cancel Listener
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const isReturn = params.get('paypal_return') === 'true';
+    const isCancel = params.get('paypal_cancel') === 'true';
+    const token = params.get('token');
+    const payerId = params.get('PayerID') || params.get('payer_id');
+    const intentId = params.get('intent_id');
+
+    if (isReturn && token && intentId) {
+      setPaypalNotice({
+        type: 'processing',
+        message: 'Verifying and capturing PayPal sandbox payment...',
+        details: `Order: ${token}`
+      });
+
+      // Clear search params from URL so refresh does not re-trigger
+      window.history.replaceState({}, document.title, window.location.pathname);
+
+      captureIntent(intentId, token, payerId)
+        .then((res) => {
+          setPaypalNotice({
+            type: 'success',
+            message: 'PayPal payment approved & captured successfully! Ledger updated.',
+            details: `Order: ${res.paypal_order_id || token} · Capture: ${res.paypal_capture_id}`
+          });
+          loadData();
+          setTimeout(() => {
+            setPaypalNotice(null);
+          }, 8000);
+        })
+        .catch((err) => {
+          const isUnapproved = err.message?.includes('ORDER_NOT_APPROVED');
+          setPaypalNotice({
+            type: 'error',
+            message: isUnapproved
+              ? 'PayPal Order not approved yet. Buyer approval was not completed.'
+              : `PayPal capture failed: ${err.message || 'Unknown error'}`,
+            details: `Order: ${token}`
+          });
+        });
+    } else if (isCancel) {
+      setPaypalNotice({
+        type: 'cancel',
+        message: 'PayPal checkout was cancelled. No funds were debited.',
+        details: token ? `Order: ${token}` : null
+      });
+      window.history.replaceState({}, document.title, window.location.pathname);
+      setTimeout(() => {
+        setPaypalNotice(null);
+      }, 6000);
+    }
   }, [loadData]);
 
   const handleOpenCoachWithQuery = useCallback((query, chartId = null, filterContext = null) => {
@@ -132,6 +193,42 @@ export default function App() {
         </div>
       </header>
 
+      {/* PayPal Redirect Feedback Notification Banner */}
+      {paypalNotice && (
+        <div
+          className={`px-4 py-3 border-b flex items-center justify-between text-xs transition-all animate-in fade-in ${
+            paypalNotice.type === 'processing'
+              ? 'bg-amber-950/80 border-amber-800 text-amber-200'
+              : paypalNotice.type === 'success'
+              ? 'bg-emerald-950/80 border-emerald-800 text-emerald-200'
+              : paypalNotice.type === 'cancel'
+              ? 'bg-slate-900 border-slate-700 text-slate-300'
+              : 'bg-rose-950/80 border-rose-800 text-rose-200'
+          }`}
+        >
+          <div className="max-w-[1440px] mx-auto w-full flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              {paypalNotice.type === 'processing' && <Loader2 className="w-4 h-4 animate-spin text-amber-400" />}
+              {paypalNotice.type === 'success' && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
+              {paypalNotice.type === 'cancel' && <AlertTriangle className="w-4 h-4 text-slate-400" />}
+              {paypalNotice.type === 'error' && <AlertTriangle className="w-4 h-4 text-rose-400" />}
+              <div>
+                <span className="font-bold">{paypalNotice.message}</span>
+                {paypalNotice.details && (
+                  <span className="font-mono text-[11px] opacity-80 ml-2">({paypalNotice.details})</span>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={() => setPaypalNotice(null)}
+              className="text-slate-400 hover:text-white p-1 rounded-lg transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Main View Area */}
       <main className="flex-1">
         {view === 'hud' ? (
@@ -141,7 +238,9 @@ export default function App() {
             onOpenIntent={() => setIsIntentOpen(true)}
             onOpenCoach={(q) => handleOpenCoachWithQuery(q || '')}
             onAskChart={(chartId) => handleOpenCoachWithQuery('What does this 7-day spending chart mean?', chartId)}
-            onTriggerOverride={handleOpenOverride}
+            onOpenConfig={() => setIsConfigOpen(true)}
+            onOpenBatchDispatcher={() => setIsBatchDispatcherOpen(true)}
+            onSyncSuccess={loadData}
           />
         ) : (
           <div className="flex flex-col lg:flex-row flex-1 min-h-[calc(100vh-61px)]">
@@ -178,11 +277,21 @@ export default function App() {
       </main>
 
       {/* Modals */}
+      <BucketConfigModal
+        isOpen={isConfigOpen}
+        onClose={() => setIsConfigOpen(false)}
+        onSuccess={loadData}
+      />
+
       <QuickIntentModal
         isOpen={isIntentOpen}
         onClose={() => setIsIntentOpen(false)}
         onOpenOverride={handleOpenOverride}
         onAskCoach={(q) => handleOpenCoachWithQuery(q)}
+        onOpenBatchDispatcher={() => {
+          setIsIntentOpen(false);
+          setIsBatchDispatcherOpen(true);
+        }}
         onSuccess={loadData}
       />
 
@@ -190,6 +299,12 @@ export default function App() {
         isOpen={isOverrideOpen}
         onClose={() => setIsOverrideOpen(false)}
         intentId={activeOverrideIntentId}
+        onSuccess={loadData}
+      />
+
+      <BatchDispatcherModal
+        isOpen={isBatchDispatcherOpen}
+        onClose={() => setIsBatchDispatcherOpen(false)}
         onSuccess={loadData}
       />
 

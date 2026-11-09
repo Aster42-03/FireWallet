@@ -74,9 +74,8 @@ async def get_me(
         "policy": policy.model_dump() if policy else {}
     }
 
-@router.patch("/me/policy")
-async def update_policy(
-    body: PolicyUpdate,
+@router.get("/me/policy")
+async def get_policy(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session)
 ) -> Dict[str, Any]:
@@ -85,10 +84,44 @@ async def update_policy(
     policy = result.first()
     if not policy:
         raise HTTPException(status_code=404, detail="Policy not found")
+    return policy.model_dump()
 
-    for field, val in body.model_dump(exclude_unset=True).items():
+
+@router.patch("/me/policy")
+@router.put("/me/policy")
+async def update_policy(
+    body: PolicyUpdate,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session)
+) -> Dict[str, Any]:
+    from app.ledger.engine import LedgerEngine
+
+    stmt = select(BudgetPolicy).where(BudgetPolicy.user_id == user.id)
+    result = await session.exec(stmt)
+    policy = result.first()
+    if not policy:
+        raise HTTPException(status_code=404, detail="Policy not found")
+
+    updates = body.model_dump(exclude_unset=True)
+    for field, val in updates.items():
         setattr(policy, field, val)
     session.add(policy)
     await session.commit()
     await session.refresh(policy)
-    return {"status": "updated", "policy": policy.model_dump()}
+
+    updated_balances = await LedgerEngine.sync_and_allocate_buckets(session, user.id)
+    buckets_list = [
+        {
+            "kind": kind,
+            "name": data["name"],
+            "available": data["available"],
+            "held": data["held"],
+            "pending_paypal": 0,
+        }
+        for kind, data in updated_balances.items()
+    ]
+    return {
+        "status": "updated",
+        "policy": policy.model_dump(),
+        "buckets": buckets_list,
+    }

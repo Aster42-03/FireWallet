@@ -12,6 +12,9 @@ from app.models.intent import (
     OverrideBase, Override, OverrideRead,
 )
 from app.models.bill import BillBase, Bill, BillRead
+from app.models.batch_payment import (
+    BatchPaymentItemBase, BatchPaymentItem, BatchPaymentItemRead,
+)
 from app.models.coach import (
     CoachThreadBase, CoachThread, CoachThreadRead,
     CoachMessageBase, CoachMessage, CoachMessageRead,
@@ -51,6 +54,9 @@ __all__ = [
     "BillBase",
     "Bill",
     "BillRead",
+    "BatchPaymentItemBase",
+    "BatchPaymentItem",
+    "BatchPaymentItemRead",
     "CoachThreadBase",
     "CoachThread",
     "CoachThreadRead",

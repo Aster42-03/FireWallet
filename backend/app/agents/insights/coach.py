@@ -36,6 +36,7 @@ from app.agents.rag import (
 from app.models.bucket import Bucket
 from app.models.coach import CoachThread, CoachMessage
 from app.models.intent import AgentRun, Intent, Override
+from app.models.batch_payment import BatchPaymentItem
 from app.ledger.engine import LedgerEngine
 from app.analytics.summary import get_hud_summary
 from app.analytics.deep_analytics import query_deep_ledger, detect_spending_anomalies
@@ -133,13 +134,13 @@ async def handle_coach_query(
                 for r in selected_rows[:4]
             ]
             selected_summary = (
-                f"- User Selected Rows in AG Grid: {len(selected_rows)} transactions (Total: ${selected_total / 100:.2f})\n"
+                f"- User Selected Ledger Rows: {len(selected_rows)} transactions (Total: ${selected_total / 100:.2f})\n"
                 f"- Selected Items: {item_descriptions}\n"
             )
 
         context_str = (
             f"{balance_block}\n"
-            f"AG Grid Active Filter & Deep Audit Context:\n"
+            f"Ledger Active Filter & Deep Audit Context:\n"
             f"- Filter: {filter_context}\n"
             f"- Filtered Count: {deep_res['total_count']} transactions\n"
             f"- Filtered Debits: ${aggs.get('total_debits', 0) / 100:.2f} | Credits: ${aggs.get('total_credits', 0) / 100:.2f}\n"
@@ -177,7 +178,7 @@ async def handle_coach_query(
 
     system_prompt = (
         "You are the Unified Trinity Coach for FireWallet. In a SINGLE structured JSON response, "
-        "evaluate the user's message against their live Trinity bucket balances, AG Grid telemetry, "
+        "evaluate the user's message against their live Trinity bucket balances, ledger telemetry, "
         "and RAG historical short-tag memory. Write a warm, concise, plain-spoken conversational `reply` "
         "AND decide the structured action metadata.\n\n"
         "Return STRICT JSON matching this exact schema:\n"
@@ -254,6 +255,14 @@ async def handle_coach_query(
     is_sweep_query = action_type == "sweep_to_vault" or any(
         w in lower_utt for w in ("sweep", "save to vault", "move to vault", "transfer to vault", "lock in vault")
     )
+    is_stage_query = (
+        action_type == "stage_batch"
+        or any(w in lower_utt for w in ("stage", "batch queue", "batch payment", "queue payment", "stage bill", "stage payment", "add to batch", "queue in batch"))
+        or (
+            any(w in lower_utt for w in ("bill", "rent", "utility", "electric", "water", "internet", "wifi"))
+            and any(w in lower_utt for w in ("stage", "queue", "batch"))
+        )
+    )
 
     if is_sweep_query and not filter_context and not chart_id:
         sweep_cents = amount_cents or 2500
@@ -284,6 +293,54 @@ async def handle_coach_query(
                 f"so sweeping ${sweep_cents / 100:.2f} isn't possible right now."
             )
 
+    elif is_stage_query and amount_cents and amount_cents > 0 and not filter_context and not chart_id:
+        email_match = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", utterance)
+        recipient_email = email_match.group(0) if email_match else (merchant_name if (merchant_name and "@" in merchant_name) else "billing@service.com")
+        cat_name = (category if category and category != "general" else "bills").capitalize()
+        title = short_tag.title() if short_tag and short_tag != "general spend" else (merchant_name or f"{cat_name} Payment")
+
+        batch_item = BatchPaymentItem(
+            user_id=user_id,
+            title=title,
+            recipient_name=title,
+            amount_minor=amount_cents,
+            category=cat_name,
+            currency="USD",
+            source_bucket="bills",
+            status="pending_approval",
+            recommended=True,
+            recipient_email=recipient_email,
+            payee_email=recipient_email,
+            note=utterance[:120],
+        )
+        session.add(batch_item)
+        await session.commit()
+        await session.refresh(batch_item)
+
+        decision_status = "accepted"
+        action_type = "stage_batch"
+        target_bucket = "bills"
+        necessity = "bill"
+
+        action_card = ActionCard(
+            action_type="stage_batch",
+            label=f"View in Batch Dispatcher (${amount_cents / 100:.2f})",
+            short_tag=short_tag,
+            utterance=utterance[:120],
+            amount_cents=amount_cents,
+            category=cat_name.lower(),
+            necessity="bill",
+            target_bucket="bills",
+            merchant_name=recipient_email,
+            is_emergency=False,
+            verdict="accepted",
+        )
+        reply_text = (
+            f"I've staged your payment of ${amount_cents / 100:.2f} to {recipient_email} into the **Batch Dispatcher** "
+            f"under your isolated Reserved Bills reserve. You can review and authorize the batch execution anytime in the Batch Dispatcher."
+        )
+        citations["buckets"] = ["bills"]
+
     elif amount_cents and amount_cents > 0 and not filter_context and not chart_id:
         # Determine target bucket cleanly
         if target_bucket not in ("daily", "freedom", "bills", "bank", "vault"):
@@ -291,24 +348,14 @@ async def handle_coach_query(
         if necessity not in ("bill", "daily_living", "freedom", "ambiguous"):
             necessity = "freedom" if target_bucket == "freedom" else "daily_living"
 
-        # Check explicit attempt to spend from Vault
-        if target_bucket == "vault" or "from vault" in lower_utt or "raid vault" in lower_utt:
-            decision_status = "rejected"
-            action_type = "none"
-            reply_text = (
-                "Your **Locked Savings Vault** cannot be spent directly under Trinity firewall rules. "
-                "If this is an urgent expense, we can evaluate your Daily or Bank Foundation instead."
-            )
-            citations["buckets"] = ["vault"]
-        elif det_emerg:
-            # Valid emergency -> ZERO cooldown delay! Pre-approve Intent + Override immediately.
-            daily_avail = balances.get("daily", {}).get("available", 0)
+        if det_emerg:
+            # Valid emergency -> ZERO cooldown delay! Route to Locked Savings Vault (BUG-008).
+            vault_avail = balances.get("vault", {}).get("available", 0)
             bank_avail = balances.get("bank", {}).get("available", 0)
-            chosen_kind = "daily" if daily_avail >= amount_cents else "bank"
-            chosen_avail = balances.get(chosen_kind, {}).get("available", 0)
+            total_emerg_avail = vault_avail + bank_avail
 
-            if chosen_avail >= amount_cents:
-                bucket_stmt = select(Bucket).where(Bucket.user_id == user_id).where(Bucket.kind == chosen_kind)
+            if total_emerg_avail >= amount_cents:
+                bucket_stmt = select(Bucket).where(Bucket.user_id == user_id).where(Bucket.kind == "vault")
                 bucket_obj = (await session.exec(bucket_stmt)).first()
 
                 pre_intent = Intent(
@@ -320,53 +367,55 @@ async def handle_coach_query(
                     merchant_name=merchant_name,
                     category=category if category != "general" else "emergency",
                     necessity="daily_living",
-                    recommended_bucket=chosen_kind,
+                    recommended_bucket="vault",
                     source_bucket_id=bucket_obj.id if bucket_obj else None,
                     is_emergency=True,
-                    status="override_approved" if chosen_kind == "bank" else "allowed",
+                    status="allowed",
                 )
                 session.add(pre_intent)
                 await session.commit()
                 await session.refresh(pre_intent)
 
-                if chosen_kind == "bank":
-                    emerg_ov = Override(
-                        intent_id=pre_intent.id,
-                        user_id=user_id,
-                        body=f"[Coach Verified Emergency - 0s Cooldown]: {utterance}",
-                        short_tag=short_tag,
-                        is_emergency=True,
-                        status="approved",
-                        ready_at=utc_now(),
-                    )
-                    session.add(emerg_ov)
-                    await session.commit()
-
                 decision_status = "accepted"
                 action_type = "paypal_checkout"
-                target_bucket = chosen_kind
+                target_bucket = "vault"
                 action_card = ActionCard(
                     action_type="paypal_checkout",
-                    label=f"Emergency Pay ${amount_cents / 100:.2f} via PayPal (0s Delay)",
+                    label=f"Emergency Autonomous Pay ${amount_cents / 100:.2f} via Vault (0s Delay)",
                     short_tag=short_tag,
                     utterance=utterance[:120],
                     amount_cents=amount_cents,
                     category=pre_intent.category or "emergency",
                     necessity="daily_living",
-                    target_bucket=chosen_kind,
+                    target_bucket="vault",
                     merchant_name=merchant_name,
                     intent_id=pre_intent.id,
                     is_emergency=True,
                     verdict="accepted",
                 )
-                citations["buckets"] = [chosen_kind]
+                reply_text = (
+                    f"Verified genuine emergency: {emerg_reason}\n\n"
+                    f"Empowered autonomous payment of ${amount_cents / 100:.2f} routed from your **Locked Savings Vault** "
+                    f"with 0s cooldown bypass."
+                )
+                citations["buckets"] = ["vault"]
             else:
                 decision_status = "rejected"
                 action_type = "none"
                 reply_text = (
-                    f"Even with emergency zero-delay override, ${amount_cents / 100:.2f} exceeds your available "
-                    f"Bank Foundation balance (${bank_avail / 100:.2f})."
+                    f"This verified emergency requires ${amount_cents / 100:.2f}, but your combined emergency reserves "
+                    f"(Vault ${vault_avail / 100:.2f} + Bank ${bank_avail / 100:.2f} = ${total_emerg_avail / 100:.2f}) "
+                    f"are insufficient."
                 )
+                citations["buckets"] = ["vault", "bank"]
+        elif target_bucket == "vault" or "from vault" in lower_utt or "raid vault" in lower_utt:
+            decision_status = "rejected"
+            action_type = "none"
+            reply_text = (
+                "Your **Locked Savings Vault** cannot be spent directly under Trinity firewall rules. "
+                "If this is an urgent expense, we can evaluate your Daily or Bank Foundation instead."
+            )
+            citations["buckets"] = ["vault"]
         else:
             # Standard non-emergency spend: run deterministic LedgerEngine.can_spend
             is_ok, pol_status, pol_rationale = await LedgerEngine.can_spend(
@@ -511,4 +560,6 @@ async def handle_coach_query(
         "action_card": action_card.model_dump() if action_card else None,
         "citations": citations,
         "suggest_intent": suggest_intent,
+        "provider": llm_client.active_provider,
+        "model": llm_client.model,
     }
