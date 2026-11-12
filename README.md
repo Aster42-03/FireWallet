@@ -2,7 +2,6 @@
 
 > **A Proactive Financial Firewall & AI Coach built on the Trinity Bucket Architecture for the [PayPal AI Hackathon](https://paypalaihackathon.devpost.com/).**
 
-[![Render Deployment](https://img.shields.io/badge/Render-Hosted_Live-46E3B7?logo=render&logoColor=white)](https://firewallet-web.onrender.com)
 [![PayPal Developer](https://img.shields.io/badge/PayPal-Sandbox_v2-00457C?logo=paypal&logoColor=white)](https://developer.paypal.com)
 [![uv](https://img.shields.io/badge/Python_Manager-uv-DE5FE9?logo=astral&logoColor=white)](https://astral.sh/uv)
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)

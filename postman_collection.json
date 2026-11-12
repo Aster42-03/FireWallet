@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "7ec2c1f0-813b-45f7-8a18-1e7ff43a604b",
     "name": "FireWallet API (PayPal AI Hackathon)",
-    "description": "Complete smoke-test and contract verification collection for FireWallet's proactive financial firewall, Trinity bucket engine, PayPal Sandbox execution, and AI Financial Coach.",
+    "description": "Complete, production-grade Postman collection for FireWallet: Proactive Financial Firewall, Trinity Envelope Engine (Bank, Daily, Freedom, Vault, Bills), PayPal Sandbox Orders v2 & Batch Payouts, AI Financial Coach, and AG Grid Deep Analytics.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -25,11 +25,36 @@
       "key": "paypalOrderId",
       "value": "",
       "type": "string"
+    },
+    {
+      "key": "billId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "batchItemId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "payoutBatchId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "threadId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "partnerToken",
+      "value": "",
+      "type": "string"
     }
   ],
   "item": [
     {
-      "name": "System & Health",
+      "name": "1. System & Health",
       "item": [
         {
           "name": "Health Check",
@@ -38,9 +63,14 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/health",
-              "host": ["{{baseUrl}}"],
-              "path": ["health"]
-            }
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Returns operational health status, database connectivity, and active PayPal environment."
           }
         },
         {
@@ -50,151 +80,386 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/",
-              "host": ["{{baseUrl}}"],
-              "path": [""]
-            }
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                ""
+              ]
+            },
+            "description": "Returns system metadata, project name, version, and documentation links."
           }
         }
       ]
     },
     {
-      "name": "Buckets & Policy",
+      "name": "2. Auth & Policy",
       "item": [
         {
-          "name": "Get User Profile & Policy",
+          "name": "Get User Profile",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/v1/me",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "me"]
-            }
-          }
-        },
-        {
-          "name": "Get Trinity Buckets (Bank, Daily, Freedom, Vault, Bills)",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/buckets",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "buckets"]
-            }
-          }
-        },
-        {
-          "name": "Get Standard Ledger Entries",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/ledger?limit=20",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "ledger"],
-              "query": [
-                {
-                  "key": "limit",
-                  "value": "20"
-                }
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "me"
               ]
-            }
+            },
+            "description": "Retrieves the authenticated demo user profile, email, and linked Trinity configuration."
+          }
+        },
+        {
+          "name": "Get Budget Policy",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/me/policy",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "me",
+                "policy"
+              ]
+            },
+            "description": "Fetches current envelope limits: daily allowance, freedom cap, vault skim bps, and friction parameters."
+          }
+        },
+        {
+          "name": "Update Budget Policy (PUT - Full)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"daily_amount\": 5000,\n  \"freedom_monthly_amount\": 30000,\n  \"bills_monthly_amount\": 120000,\n  \"vault_skim_bps\": 1000,\n  \"bank_spend_requires_override\": true,\n  \"vault_spend_allowed\": false,\n  \"override_min_chars\": 200,\n  \"override_cooldown_seconds\": 180,\n  \"partner_required_for_bank\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/me/policy",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "me",
+                "policy"
+              ]
+            },
+            "description": "Full update of envelope rules, daily limits, and friction lock policies."
+          }
+        },
+        {
+          "name": "Update Budget Policy (PATCH - Partial)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"daily_amount\": 5500,\n  \"vault_skim_bps\": 1200\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/me/policy",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "me",
+                "policy"
+              ]
+            },
+            "description": "Partially update envelope daily allowance or savings skim percentage."
           }
         }
       ]
     },
     {
-      "name": "Intent Gateway (Proactive Firewall)",
+      "name": "3. Buckets & Ledger",
       "item": [
         {
-          "name": "1. Submit Allowed Intent (Groceries $24.00)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "var jsonData = pm.response.json();",
-                  "if (jsonData.id) { pm.collectionVariables.set('intentId', jsonData.id); }"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
+          "name": "Get Trinity Buckets",
           "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Idempotency-Key",
-                "value": "pm-test-intent-1"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"utterance\": \"Buying groceries at Trader Joe's\",\n  \"amount\": 2400,\n  \"currency\": \"USD\",\n  \"merchant_name\": \"Trader Joe's\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/intents",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "intents"]
-            }
-          }
-        },
-        {
-          "name": "2. Submit Denied Intent (Late-Night Sushi $35.00)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Idempotency-Key",
-                "value": "pm-test-intent-2"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"utterance\": \"Late-night sushi delivery at 1:30 AM\",\n  \"amount\": 3500,\n  \"currency\": \"USD\",\n  \"merchant_name\": \"DoorDash\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/intents",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "intents"]
-            }
-          }
-        },
-        {
-          "name": "3. Execute Intent (Ledger Hold + PayPal Orders v2)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "var jsonData = pm.response.json();",
-                  "if (jsonData.paypal_order_id) { pm.collectionVariables.set('paypalOrderId', jsonData.paypal_order_id); }"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
+            "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/intents/{{intentId}}/execute",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "intents", "{{intentId}}", "execute"]
-            }
+              "raw": "{{baseUrl}}/api/v1/buckets",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "buckets"
+              ]
+            },
+            "description": "Returns current balances for the 5 Trinity envelopes: Bank Foundation, Daily Living, Freedom, Vault, and Reserved Bills."
           }
         },
         {
-          "name": "4. Capture Intent (PayPal Capture + Settle Hold)",
+          "name": "Get Double-Entry Ledger Entries",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/ledger?limit=25",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "ledger"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "25"
+                }
+              ]
+            },
+            "description": "Returns immutable double-entry ledger entries with signed amounts, states (hold/posted), and transfer references."
+          }
+        },
+        {
+          "name": "Get Ledger Entries by Bucket (Daily)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/ledger?bucket=daily&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "ledger"
+              ],
+              "query": [
+                {
+                  "key": "bucket",
+                  "value": "daily"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Filters ledger transactions scoped to the Daily Living envelope."
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Intent Gateway (Proactive Firewall)",
+      "item": [
+        {
+          "name": "1. Submit Intent (Allowed Groceries $24.00)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.id) { pm.collectionVariables.set('intentId', jsonData.id); }",
+                  "pm.test('Status is accepted', function () { pm.expect(jsonData.verdict).to.eql('accepted'); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "pm-test-intent-groceries-1"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"utterance\": \"Buying fresh groceries at Trader Joe's\",\n  \"amount\": 2400,\n  \"currency\": \"USD\",\n  \"merchant_name\": \"Trader Joe's\",\n  \"short_tag\": \"groceries\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/intents",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "intents"
+              ]
+            },
+            "description": "Evaluates purchase utterance against Daily Living envelope. Returns verdict, balance preview, and sets {{intentId}}."
+          }
+        },
+        {
+          "name": "2. Submit Intent (Denied Late-Night Delivery $45.00)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "pm-test-intent-denied-2"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"utterance\": \"Late-night sushi feast via DoorDash\",\n  \"amount\": 4500,\n  \"currency\": \"USD\",\n  \"merchant_name\": \"DoorDash\",\n  \"short_tag\": \"dining\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/intents",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "intents"
+              ]
+            },
+            "description": "Demonstrates proactive denial when purchase exceeds Daily Living or Freedom envelope without prior rebalancing."
+          }
+        },
+        {
+          "name": "3. List Recorded Short Tags (RAG Semantic Memory)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/intents/tags",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "intents",
+                "tags"
+              ]
+            },
+            "description": "Returns distinct semantic tags extracted by the NLP Intent Parser across historical transactions."
+          }
+        },
+        {
+          "name": "4. Get Intent Status by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/intents/{{intentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "intents",
+                "{{intentId}}"
+              ]
+            },
+            "description": "Fetches current evaluation state, assigned bucket, and active ledger hold status for {{intentId}}."
+          }
+        },
+        {
+          "name": "5. Execute Intent (Create PayPal Order & Ledger Hold)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.paypal_order_id) { pm.collectionVariables.set('paypalOrderId', jsonData.paypal_order_id); }",
+                  "pm.test('PayPal order created or approved', function () {",
+                  "    pm.expect(jsonData.approval_url || jsonData.paypal_order_id).to.not.be.undefined;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"return_url\": \"http://localhost:5173/?paypal_return=true&intent_id={{intentId}}\",\n  \"cancel_url\": \"http://localhost:5173/?paypal_cancel=true&intent_id={{intentId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/intents/{{intentId}}/execute",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "intents",
+                "{{intentId}}",
+                "execute"
+              ]
+            },
+            "description": "Places atomic ledger hold on source envelope and calls PayPal Orders v2 to generate approval URL."
+          }
+        },
+        {
+          "name": "6. Get PayPal Order Approval Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/intents/{{intentId}}/order-status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "intents",
+                "{{intentId}}",
+                "order-status"
+              ]
+            },
+            "description": "Queries live PayPal Orders v2 API to verify whether buyer has completed approval."
+          }
+        },
+        {
+          "name": "7. Capture Intent (Complete PayPal Order & Settle Hold)",
           "request": {
             "method": "POST",
             "header": [
@@ -209,15 +474,299 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/intents/{{intentId}}/capture",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "intents", "{{intentId}}", "capture"]
-            }
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "intents",
+                "{{intentId}}",
+                "capture"
+              ]
+            },
+            "description": "Executes PayPal Orders v2 Capture and atomically settles the pending ledger hold into a posted debit."
+          }
+        },
+        {
+          "name": "8. Confirm Intent (Direct Post Confirmation)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/intents/{{intentId}}/confirm",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "intents",
+                "{{intentId}}",
+                "confirm"
+              ]
+            },
+            "description": "Confirms approved intent transaction and transitions intent state to settled."
           }
         }
       ]
     },
     {
-      "name": "Escape Window Overrides (Friction)",
+      "name": "5. Bills & The Trinity Batch Dispatcher",
+      "item": [
+        {
+          "name": "1. List Recurring Bills",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/bills",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bills"
+              ]
+            },
+            "description": "Returns all scheduled recurring obligations with due dates, priorities, payee emails, and status."
+          }
+        },
+        {
+          "name": "2. Create Recurring Bill",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.id) { pm.collectionVariables.set('billId', jsonData.id); }",
+                  "pm.test('Bill created', function () { pm.expect(jsonData.name).to.eql('Fiber Internet'); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/bills?name=Fiber%20Internet&amount=6500&due_date=2026-12-01&payee_email=sb-ic47fn53813143%40personal.example.com&priority=2",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bills"
+              ],
+              "query": [
+                {
+                  "key": "name",
+                  "value": "Fiber Internet"
+                },
+                {
+                  "key": "amount",
+                  "value": "6500"
+                },
+                {
+                  "key": "due_date",
+                  "value": "2026-12-01"
+                },
+                {
+                  "key": "payee_email",
+                  "value": "sb-ic47fn53813143@personal.example.com"
+                },
+                {
+                  "key": "priority",
+                  "value": "2"
+                }
+              ]
+            },
+            "description": "Creates a scheduled recurring bill in the database with PayPal payee email and due date."
+          }
+        },
+        {
+          "name": "3. Pay Single Bill Now",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/bills/{{billId}}/pay",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bills",
+                "{{billId}}",
+                "pay"
+              ]
+            },
+            "description": "Executes single recurring bill payout immediately from Reserved Bills reserve."
+          }
+        },
+        {
+          "name": "4. Propose Batch Obligations (AI Coach Analysis)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/bills/batch-dispatcher/propose",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bills",
+                "batch-dispatcher",
+                "propose"
+              ]
+            },
+            "description": "Analyzes pending obligations, checks isolated Vault/Bills balances, and proposes batch with human veto options."
+          }
+        },
+        {
+          "name": "5. Get Staged Batch Queue",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/bills/batch-dispatcher/queue",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bills",
+                "batch-dispatcher",
+                "queue"
+              ]
+            },
+            "description": "Returns currently staged BatchPaymentItems, status, and isolated balance protections."
+          }
+        },
+        {
+          "name": "6. Stage Intent into Batch Dispatcher",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.batch_item_id) { pm.collectionVariables.set('batchItemId', jsonData.batch_item_id); }",
+                  "pm.test('Staged successfully', function () { pm.expect(jsonData.success).to.be.true; });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"recipient_email\": \"sb-ic47fn53813143@personal.example.com\",\n  \"amount_cents\": 3500,\n  \"currency\": \"USD\",\n  \"category\": \"utilities\",\n  \"source_bucket\": \"bills\",\n  \"note\": \"Quarterly Water & Sewage Obligation\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/bills/batch-dispatcher/stage-intent",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bills",
+                "batch-dispatcher",
+                "stage-intent"
+              ]
+            },
+            "description": "Stages a custom obligation or evaluated Intent into the Batch Dispatcher queue."
+          }
+        },
+        {
+          "name": "7. Authorize Batch Dispatch (Execute via PayPal Payouts)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.payout_batch_id) { pm.collectionVariables.set('payoutBatchId', jsonData.payout_batch_id); }",
+                  "pm.test('Batch dispatched', function () { pm.expect(jsonData.status).to.be.oneOf(['completed', 'partial_failure']); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"approved_item_ids\": [\n    \"{{batchItemId}}\"\n  ],\n  \"source_bucket\": \"bills\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/bills/batch-dispatcher/execute",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bills",
+                "batch-dispatcher",
+                "execute"
+              ]
+            },
+            "description": "Atomically triggers PayPal Batch Payouts (/v1/payments/payouts) with blast radius containment."
+          }
+        },
+        {
+          "name": "8. Get Live Batch Dispatcher Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/bills/batch-dispatcher/status/{{payoutBatchId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bills",
+                "batch-dispatcher",
+                "status",
+                "{{payoutBatchId}}"
+              ]
+            },
+            "description": "Fetches live PayPal settlement status, fees, and synchronizes BatchPaymentItem records to paid."
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Escape Window Overrides (Friction)",
       "item": [
         {
           "name": "1. Submit Confession (200-char requirement)",
@@ -227,7 +776,8 @@
               "script": {
                 "exec": [
                   "var jsonData = pm.response.json();",
-                  "if (jsonData.id) { pm.collectionVariables.set('overrideId', jsonData.id); }"
+                  "if (jsonData.id) { pm.collectionVariables.set('overrideId', jsonData.id); }",
+                  "pm.test('Override created', function () { pm.expect(jsonData.status).to.eql('cooling_down'); });"
                 ],
                 "type": "text/javascript"
               }
@@ -247,9 +797,16 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/overrides",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "overrides"]
-            }
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "overrides"
+              ]
+            },
+            "description": "Initiates high-friction Escape Window. Enforces 200-character justification and 180s cooldown timer."
           }
         },
         {
@@ -259,39 +816,69 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/v1/overrides/{{overrideId}}/check-cooldown",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "overrides", "{{overrideId}}", "check-cooldown"]
-            }
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "overrides",
+                "{{overrideId}}",
+                "check-cooldown"
+              ]
+            },
+            "description": "Queries remaining seconds on the 180s cooldown timer or verifies partner authorization status."
+          }
+        },
+        {
+          "name": "3. Cancel Override",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/overrides/{{overrideId}}/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "overrides",
+                "{{overrideId}}",
+                "cancel"
+              ]
+            },
+            "description": "Cancels active override attempt, closes Escape Window, and restores Bank Foundation isolation."
           }
         }
       ]
     },
     {
-      "name": "Financial Coach (Advanced Reasoning)",
+      "name": "7. Accountability Partner Protocol",
       "item": [
         {
-          "name": "1. Affordability Simulation Query",
+          "name": "1. Inspect Partner Approval Request",
           "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"utterance\": \"Can I afford a $20 movie ticket tonight?\",\n  \"chart_id\": null,\n  \"filter_context\": null\n}"
-            },
+            "method": "GET",
+            "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/coach/messages",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "coach", "messages"]
-            }
+              "raw": "{{baseUrl}}/api/v1/partner/approve/{{partnerToken}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "partner",
+                "approve",
+                "{{partnerToken}}"
+              ]
+            },
+            "description": "Partner landing endpoint to inspect confession, amount, and request context."
           }
         },
         {
-          "name": "2. Chart Literacy Query (7-Day Category Pie)",
+          "name": "2. Submit Partner Decision",
           "request": {
             "method": "POST",
             "header": [
@@ -302,84 +889,388 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"utterance\": \"What does this pie chart mean?\",\n  \"chart_id\": \"chart_pie_week\",\n  \"filter_context\": null\n}"
+              "raw": "{\n  \"decision\": \"approved\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/v1/coach/messages",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "coach", "messages"]
-            }
-          }
-        },
-        {
-          "name": "3. AG Grid Deep Filter Interrogation",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"utterance\": \"Analyze my dining-out spending velocity over the last 30 days.\",\n  \"chart_id\": null,\n  \"filter_context\": {\n    \"category\": \"eating_out\",\n    \"bucket\": \"freedom\"\n  }\n}"
+              "raw": "{{baseUrl}}/api/v1/partner/approve/{{partnerToken}}/decision",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "partner",
+                "approve",
+                "{{partnerToken}}",
+                "decision"
+              ]
             },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/coach/messages",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "coach", "messages"]
-            }
+            "description": "Submits partner verdict ('approved' or 'denied') for Bank Foundation raid."
           }
         }
       ]
     },
     {
-      "name": "Desktop Deep Analytics (AG Grid Source)",
+      "name": "8. Financial Coach (Autonomous Reasoning)",
       "item": [
         {
-          "name": "Get Deep Ledger Records (Multi-sort & State)",
+          "name": "1. Get Coach Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/coach/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "coach",
+                "status"
+              ]
+            },
+            "description": "Returns AI Coach provider telemetry, primary LLM status, and fallback health."
+          }
+        },
+        {
+          "name": "2. List Active Threads",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/coach/threads",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "coach",
+                "threads"
+              ]
+            },
+            "description": "Lists conversational threads for the authenticated user."
+          }
+        },
+        {
+          "name": "3. Get Thread Messages",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/coach/threads/{{threadId}}/messages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "coach",
+                "threads",
+                "{{threadId}}",
+                "messages"
+              ]
+            },
+            "description": "Fetches chronological chat history for a specific thread."
+          }
+        },
+        {
+          "name": "4. Send Message (Affordability Query)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.thread_id) { pm.collectionVariables.set('threadId', jsonData.thread_id); }",
+                  "pm.test('Coach responded', function () { pm.expect(jsonData.reply).to.be.a('string'); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"utterance\": \"Can I afford a $25 dinner with friends tonight without breaking my streak?\",\n  \"chart_id\": null,\n  \"filter_context\": null\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/coach/messages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "coach",
+                "messages"
+              ]
+            },
+            "description": "Submits financial reasoning prompt to the AI Coach. Returns decision, citations, and optional 1-tap action card."
+          }
+        },
+        {
+          "name": "5. Send Message (Deep Filter Context / AG Grid)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"utterance\": \"Diagnose my daily spending velocity and 30-day runway.\",\n  \"chart_id\": null,\n  \"filter_context\": {\n    \"category\": \"groceries\",\n    \"bucket\": \"daily\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/coach/messages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "coach",
+                "messages"
+              ]
+            },
+            "description": "Sends targeted audit query with active AG Grid filters for contextual analysis."
+          }
+        },
+        {
+          "name": "6. Execute Coach 1-Tap Action Card",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action_type\": \"sweep_to_vault\",\n  \"utterance\": \"Sweep excess daily rollover into Vault\",\n  \"amount_cents\": 1500,\n  \"currency\": \"USD\",\n  \"target_bucket\": \"vault\",\n  \"auto_capture_demo\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/coach/execute-action",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "coach",
+                "execute-action"
+              ]
+            },
+            "description": "Executes pre-filled ActionCard decision (sweep_to_vault, paypal_checkout, or stage_batch)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "9. Deep Analytics (AG Grid Source) & HUD",
+      "item": [
+        {
+          "name": "1. Get HUD Summary Telemetry",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/stats/summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "stats",
+                "summary"
+              ]
+            },
+            "description": "Provides aggregated metrics for Mobile HUD: daily allowance, rollover streak, burn rate, and policy."
+          }
+        },
+        {
+          "name": "2. Get Deep Ledger Records (AG Grid Source)",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/v1/analytics/deep-ledger?limit=50",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "analytics", "deep-ledger"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "analytics",
+                "deep-ledger"
+              ],
               "query": [
                 {
                   "key": "limit",
                   "value": "50"
                 }
               ]
-            }
+            },
+            "description": "Supplies desktop AG Grid with multi-sorted double-entry records, running balances, and audit proofs."
           }
         },
         {
-          "name": "Detect Spending Anomalies",
+          "name": "3. Detect Spending Anomalies",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/v1/analytics/anomalies?days=30",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "analytics", "anomalies"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "analytics",
+                "anomalies"
+              ],
               "query": [
                 {
                   "key": "days",
                   "value": "30"
                 }
               ]
-            }
+            },
+            "description": "Detects sudden spending deviations or category burn spikes over the past 30 days."
           }
         }
       ]
     },
     {
-      "name": "PayPal Webhook Simulation",
+      "name": "10. PayPal Sandbox Balance & Lifecycle",
       "item": [
         {
-          "name": "Simulate PAYMENT.CAPTURE.COMPLETED Webhook",
+          "name": "1. Get Live PayPal Sandbox Balance",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/paypal/balance",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "paypal",
+                "balance"
+              ]
+            },
+            "description": "Queries live PayPal Sandbox balance (/v1/reporting/balances) and compares with Trinity ledger totals."
+          }
+        },
+        {
+          "name": "2. Sync PayPal Account Balance",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"override_balance_cents\": null\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/paypal/sync-balance",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "paypal",
+                "sync-balance"
+              ]
+            },
+            "description": "Synchronizes Trinity envelope state with PayPal Sandbox wallet balance."
+          }
+        },
+        {
+          "name": "3. Trigger Payday Envelope Allocation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"gross_income_cents\": 300000,\n  \"dispatch_vault_payout\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/paypal/payday",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "paypal",
+                "payday"
+              ]
+            },
+            "description": "Simulates income deposit and executes automatic allocation into Trinity envelopes according to policy."
+          }
+        },
+        {
+          "name": "4. Trigger Midnight Rollover & Vault Skim",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sweep_surplus_to_vault\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/paypal/rollover",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "paypal",
+                "rollover"
+              ]
+            },
+            "description": "Triggers daily rollover: resets daily allowance, increments positive streak, and skims savings into Vault."
+          }
+        }
+      ]
+    },
+    {
+      "name": "11. PayPal Webhook Simulation",
+      "item": [
+        {
+          "name": "1. Ingest PAYMENT.CAPTURE.COMPLETED Webhook",
           "request": {
             "method": "POST",
             "header": [
@@ -389,18 +1280,92 @@
               },
               {
                 "key": "paypal-transmission-id",
-                "value": "test-transmission-12345"
+                "value": "wh-sim-capture-tx-001"
               }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": \"WH-SIMULATED-CAPTURE-001\",\n  \"event_type\": \"PAYMENT.CAPTURE.COMPLETED\",\n  \"create_time\": \"2026-10-28T14:30:00Z\",\n  \"resource\": {\n    \"id\": \"CAPTURE-SIM-987654\",\n    \"custom_id\": \"{{intentId}}\",\n    \"status\": \"COMPLETED\",\n    \"amount\": {\n      \"currency_code\": \"USD\",\n      \"value\": \"24.00\"\n    }\n  }\n}"
+              "raw": "{\n  \"id\": \"WH-CAPTURE-COMPLETED-001\",\n  \"event_type\": \"PAYMENT.CAPTURE.COMPLETED\",\n  \"create_time\": \"2026-11-12T16:00:00Z\",\n  \"resource\": {\n    \"id\": \"CAPTURE-LIVE-SANDBOX-001\",\n    \"custom_id\": \"{{intentId}}\",\n    \"status\": \"COMPLETED\",\n    \"amount\": {\n      \"currency_code\": \"USD\",\n      \"value\": \"24.00\"\n    }\n  }\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/webhooks/paypal",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v1", "webhooks", "paypal"]
-            }
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "webhooks",
+                "paypal"
+              ]
+            },
+            "description": "Simulates incoming PayPal capture notification to settle pending ledger hold atomically."
+          }
+        },
+        {
+          "name": "2. Ingest CHECKOUT.ORDER.APPROVED Webhook",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "paypal-transmission-id",
+                "value": "wh-sim-approve-tx-002"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"WH-ORDER-APPROVED-002\",\n  \"event_type\": \"CHECKOUT.ORDER.APPROVED\",\n  \"create_time\": \"2026-11-12T16:02:00Z\",\n  \"resource\": {\n    \"id\": \"{{paypalOrderId}}\",\n    \"status\": \"APPROVED\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/webhooks/paypal",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "webhooks",
+                "paypal"
+              ]
+            },
+            "description": "Marks spend intent approved upon customer authorization in PayPal checkout."
+          }
+        },
+        {
+          "name": "3. Ingest PAYMENT.PAYOUTSBATCH.SUCCESS Webhook",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "paypal-transmission-id",
+                "value": "wh-sim-payout-tx-003"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"WH-PAYOUTS-SUCCESS-003\",\n  \"event_type\": \"PAYMENT.PAYOUTSBATCH.SUCCESS\",\n  \"create_time\": \"2026-11-12T16:04:00Z\",\n  \"resource\": {\n    \"batch_header\": {\n      \"payout_batch_id\": \"{{payoutBatchId}}\",\n      \"batch_status\": \"SUCCESS\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/webhooks/paypal",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "webhooks",
+                "paypal"
+              ]
+            },
+            "description": "Confirms PayPal Batch Payout completion and transitions all batch payment items to paid."
           }
         }
       ]
