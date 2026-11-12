@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { sendCoachMessage, executeCoachAction, fetchCoachStatus, captureIntent } from '../../shared/api';
 import { MarkdownRenderer } from './MarkdownRenderer';
+import { useToast } from '../notifications/ToastContext';
 
 export function CoachDrawer({
   isOpen,
@@ -44,6 +45,7 @@ export function CoachDrawer({
   onActionSuccess,
   mode = 'drawer' // 'drawer' (modal overlay) or 'sidebar' (side-by-side pane)
 }) {
+  const { showToast } = useToast();
   const [messages, setMessages] = useState([
     {
       id: 'welcome',
@@ -285,6 +287,13 @@ export function CoachDrawer({
           }
         }
       }));
+      showToast({
+        type: 'order_success',
+        title: 'PayPal Payment Settled',
+        message: 'Coach checkout action captured & settled! Double-entry ledger updated.',
+        details: `Order: ${res.paypal_order_id || orderId} · Capture: ${res.paypal_capture_id}`,
+        duration: 5000,
+      });
       onActionSuccess?.();
     } catch (err) {
       const isUnapproved = err.message?.includes('ORDER_NOT_APPROVED');
@@ -320,7 +329,7 @@ export function CoachDrawer({
       const res = await executeCoachAction(card, true);
 
       // Open PayPal checkout approval URL in a new tab if provided
-      if (res.approval_url && !res.approval_url.includes('ORDER-MOCK')) {
+      if (res.approval_url) {
         window.open(res.approval_url, '_blank', 'noopener,noreferrer');
       }
 

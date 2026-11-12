@@ -136,6 +136,8 @@ class IntentResponse(BaseModel):
     id: UUID
     status: str
     verdict: str = "accepted"  # 'accepted', 'rejected', or 'refer_to_coach'
+    amount: Optional[int] = Field(default=None, description="Intent amount in minor currency units (cents)")
+    currency: str = Field(default="USD", description="Currency code (USD)")
     short_tag: Optional[str] = None
     category: Optional[str] = None
     necessity: Optional[str] = None
@@ -297,9 +299,20 @@ class BatchExecutionItemResult(BaseModel):
 
 class BatchExecutionSummary(BaseModel):
     status: str = Field(default="completed", description="'completed', 'partial_failure', or 'failed'")
+    payout_batch_id: Optional[str] = Field(default=None, description="PayPal Payout Batch ID from /v1/payments/payouts")
+    batch_status: Optional[str] = Field(default=None, description="PayPal Batch Status (SUCCESS, PENDING, PROCESSING)")
     executed_count: int = Field(default=0, description="Number of successfully executed payouts")
     failed_count: int = Field(default=0, description="Number of failed payouts")
     total_amount_minor: int = Field(default=0, description="Total amount successfully executed (cents)")
     results: List[BatchExecutionItemResult] = Field(default=[], description="Item-by-item execution results")
     remaining_isolated_balance_minor: int = Field(default=0, description="Remaining balance in source bucket (cents)")
     message: str = Field(default="", description="Summary message")
+
+class BatchStatusResponse(BaseModel):
+    payout_batch_id: str
+    batch_status: str  # 'SUCCESS', 'PENDING', 'PROCESSING', 'DENIED', 'CANCELED'
+    time_created: Optional[str] = None
+    time_completed: Optional[str] = None
+    total_amount: Optional[str] = None
+    fees: Optional[str] = None
+    items: List[Dict[str, Any]] = []

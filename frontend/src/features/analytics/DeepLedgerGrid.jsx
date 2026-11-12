@@ -351,8 +351,36 @@ export default function DeepLedgerGrid({
       {
         field: 'paypal_order_id',
         headerName: 'PayPal Order ID',
-        width: 140,
-        cellClass: 'font-mono text-slate-500 text-[11px]'
+        width: 160,
+        cellRenderer: (params) => {
+          const val = params.value;
+          if (!val) return <span className="text-slate-600 font-mono text-[11px]">—</span>;
+          return (
+            <span
+              className="font-mono text-amber-300 text-[11px] bg-amber-950/60 px-2 py-0.5 rounded border border-amber-800/60 inline-block truncate max-w-full"
+              title={`PayPal Order ID: ${val}`}
+            >
+              {val}
+            </span>
+          );
+        }
+      },
+      {
+        field: 'paypal_capture_id',
+        headerName: 'PayPal Capture ID',
+        width: 160,
+        cellRenderer: (params) => {
+          const val = params.value;
+          if (!val) return <span className="text-slate-600 font-mono text-[11px]">—</span>;
+          return (
+            <span
+              className="font-mono text-emerald-300 text-[11px] bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/60 inline-block truncate max-w-full"
+              title={`PayPal Capture ID: ${val}`}
+            >
+              {val}
+            </span>
+          );
+        }
       }
     ],
     []

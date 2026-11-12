@@ -321,20 +321,7 @@ async def handle_coach_query(
         action_type = "stage_batch"
         target_bucket = "bills"
         necessity = "bill"
-
-        action_card = ActionCard(
-            action_type="stage_batch",
-            label=f"View in Batch Dispatcher (${amount_cents / 100:.2f})",
-            short_tag=short_tag,
-            utterance=utterance[:120],
-            amount_cents=amount_cents,
-            category=cat_name.lower(),
-            necessity="bill",
-            target_bucket="bills",
-            merchant_name=recipient_email,
-            is_emergency=False,
-            verdict="accepted",
-        )
+        action_card = None
         reply_text = (
             f"I've staged your payment of ${amount_cents / 100:.2f} to {recipient_email} into the **Batch Dispatcher** "
             f"under your isolated Reserved Bills reserve. You can review and authorize the batch execution anytime in the Batch Dispatcher."

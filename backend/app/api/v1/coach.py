@@ -151,6 +151,28 @@ async def execute_coach_action(
         recipient_email = body.merchant_name if (body.merchant_name and "@" in body.merchant_name) else "billing@service.com"
         title = short_tag.title() if short_tag and short_tag != "general spend" else (body.merchant_name or f"{cat} Payment")
 
+        # Idempotency check: don't double-stage if already queued in pending_approval
+        existing_stmt = (
+            select(BatchPaymentItem)
+            .where(
+                BatchPaymentItem.user_id == user.id,
+                BatchPaymentItem.amount_minor == body.amount_cents,
+                BatchPaymentItem.status == "pending_approval",
+                BatchPaymentItem.title == title,
+            )
+        )
+        existing_item = (await session.exec(existing_stmt)).first()
+        if existing_item:
+            return {
+                "status": "staged",
+                "action_type": "stage_batch",
+                "short_tag": short_tag,
+                "amount_cents": body.amount_cents,
+                "source_bucket": "bills",
+                "intent_id": existing_item.intent_id or body.intent_id,
+                "message": f"Payment of ${body.amount_cents / 100:.2f} already staged in Batch Dispatcher.",
+            }
+
         batch_item = BatchPaymentItem(
             user_id=user.id,
             intent_id=body.intent_id,
@@ -290,7 +312,7 @@ async def execute_coach_action(
             intent.source_bucket_id = hold_bucket_id
 
         hold_memo = f"[EMERGENCY VAULT DRAW] {short_tag}" if is_vault_draw else f"{short_tag}: {intent.utterance[:50]}"
-        await LedgerEngine.place_hold(
+        hold_entry = await LedgerEngine.place_hold(
             session=session,
             user_id=user.id,
             bucket_id=hold_bucket_id,
@@ -312,36 +334,14 @@ async def execute_coach_action(
 
         intent.paypal_order_id = order_id
         intent.short_tag = intent.short_tag or short_tag
-
-        token = await paypal_client.get_access_token()
-        if body.auto_capture_demo and (token == "mock_sandbox_access_token" or not paypal_client.has_live_credentials()):
-            cap_res = await paypal_client.capture_order(order_id=order_id, intent_id=str(intent.id))
-            capture_id = f"CAPTURE-{order_id[:8]}"
-            try:
-                capture_id = cap_res["purchase_units"][0]["payments"]["captures"][0]["id"]
-            except Exception:
-                pass
-
-            await LedgerEngine.settle_hold(session, intent.id, capture_id)
-            intent.status = "settled"
-            session.add(intent)
-            await session.commit()
-
-            return {
-                "status": "settled",
-                "action_type": "paypal_checkout",
-                "short_tag": intent.short_tag,
-                "amount_cents": intent.amount,
-                "source_bucket": resolved_source_kind,
-                "intent_id": intent.id,
-                "paypal_order_id": order_id,
-                "paypal_capture_id": capture_id,
-                "approval_url": approval_url,
-                "message": f"Paid ${intent.amount / 100:.2f} for '{intent.short_tag}' via PayPal ({resolved_source_kind.capitalize()}).",
-            }
-
         intent.status = "executing"
         session.add(intent)
+
+        # Propagate PayPal Order ID directly to the LedgerEntry hold record
+        if hold_entry:
+            hold_entry.paypal_order_id = order_id
+            session.add(hold_entry)
+
         await session.commit()
         return {
             "status": "awaiting_approval",

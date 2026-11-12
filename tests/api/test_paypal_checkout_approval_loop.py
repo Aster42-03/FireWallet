@@ -254,3 +254,90 @@ async def test_get_order_status_endpoint(
     status_data = status_resp.json()
     assert status_data["order_status"] == "APPROVED"
     assert status_data["payer_id"] == "PAYER-12345"
+
+
+@pytest.mark.api
+async def test_paypal_order_id_captured_in_deep_analytics_ag_grid(
+    client: httpx.AsyncClient,
+    seeded_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """
+    BUG-012 Verification:
+    Verify that when an intent is executed and captured via PayPal Orders v2:
+    1. The PayPal Order ID is immediately attached to the LedgerEntry hold record.
+    2. Upon capture, both paypal_order_id and paypal_capture_id are persisted on LedgerEntry.
+    3. The Deep Analytics endpoint (/analytics/deep-ledger) powering the AG Grid workbench
+       returns both paypal_order_id and paypal_capture_id on the item rows.
+    """
+    user = (await seeded_session.exec(select(User))).first()
+
+    intent = Intent(
+        user_id=user.id,
+        utterance="Weekend grocery run at Whole Foods",
+        amount=4200,
+        currency="USD",
+        category="groceries",
+        necessity="daily_living",
+        recommended_bucket="daily",
+        status="allowed",
+    )
+    seeded_session.add(intent)
+    await seeded_session.commit()
+    await seeded_session.refresh(intent)
+
+    # 1. Execute intent -> creates PayPal Order & hold
+    exec_resp = await client.post(f"/api/v1/intents/{intent.id}/execute")
+    assert exec_resp.status_code == 200, exec_resp.text
+    order_id = exec_resp.json()["paypal_order_id"]
+    assert order_id is not None
+
+    # Check hold entry directly in DB
+    hold_entry = (
+        await seeded_session.exec(
+            select(LedgerEntry)
+            .where(LedgerEntry.intent_id == intent.id)
+            .where(LedgerEntry.state == "hold")
+        )
+    ).first()
+    assert hold_entry is not None
+    assert hold_entry.paypal_order_id == order_id, "paypal_order_id was not propagated to hold entry!"
+
+    # 2. Complete capture
+    expected_capture_id = f"CAPTURE-AG-GRID-{uuid4().hex[:8]}"
+    async def mock_capture_success(order_id: str, intent_id: str) -> Dict[str, Any]:
+        return {
+            "id": order_id,
+            "status": "COMPLETED",
+            "purchase_units": [
+                {
+                    "payments": {
+                        "captures": [
+                            {"id": expected_capture_id, "status": "COMPLETED", "amount": {"value": "42.00", "currency_code": "USD"}}
+                        ]
+                    }
+                }
+            ],
+        }
+
+    monkeypatch.setattr(paypal_client, "capture_order", mock_capture_success)
+
+    cap_resp = await client.post(
+        f"/api/v1/intents/{intent.id}/capture",
+        json={"paypal_order_id": order_id},
+    )
+    assert cap_resp.status_code == 200, cap_resp.text
+
+    # 3. Query Deep Analytics endpoint powering AG Grid
+    deep_resp = await client.get("/api/v1/analytics/deep-ledger?limit=50")
+    assert deep_resp.status_code == 200, deep_resp.text
+    deep_data = deep_resp.json()
+
+    # Find the settled grocery row
+    matched_item = next(
+        (it for it in deep_data["items"] if it["id"] == str(hold_entry.id)),
+        None
+    )
+    assert matched_item is not None, "Ledger row not found in Deep Analytics response!"
+    assert matched_item["paypal_order_id"] == order_id, f"Expected order_id {order_id}, got {matched_item.get('paypal_order_id')}"
+    assert matched_item["paypal_capture_id"] == expected_capture_id, f"Expected capture_id {expected_capture_id}, got {matched_item.get('paypal_capture_id')}"

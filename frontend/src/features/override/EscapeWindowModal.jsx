@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { X, Lock, AlertTriangle, Clock, CheckCircle2, Loader2, Zap, Tag, Copy, Check, Users, ExternalLink, ShieldAlert } from 'lucide-react';
 import { submitOverride, checkCooldown, executeIntent, captureIntent, getIntentOrderStatus } from '../../shared/api';
+import { useToast } from '../notifications/ToastContext';
 
 export default function EscapeWindowModal({ isOpen, onClose, intentId, onSuccess }) {
+  const { showToast } = useToast();
   const [confession, setConfession] = useState('');
   const [isEmergencyMode, setIsEmergencyMode] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -54,8 +56,6 @@ export default function EscapeWindowModal({ isOpen, onClose, intentId, onSuccess
     }
     return () => clearInterval(timer);
   }, [overrideData, secondsLeft, partnerApproved]);
-
-  if (!isOpen) return null;
 
   const handleSubmitConfession = async (e) => {
     e.preventDefault();
@@ -166,15 +166,8 @@ export default function EscapeWindowModal({ isOpen, onClose, intentId, onSuccess
       const returnUrl = `${window.location.origin}/?paypal_return=true&intent_id=${intentId}`;
       const execRes = await executeIntent(intentId, returnUrl);
 
-      // Offline / Simulated Sandbox Mock flow
-      if (!execRes.approval_url || execRes.approval_url.includes('ORDER-MOCK')) {
-        await captureIntent(intentId, execRes.paypal_order_id);
-        setOutcomeAlert('Payment settled! Outcome alert dispatched to accountability partner.');
-        setTimeout(() => {
-          onSuccess?.();
-          onClose();
-        }, 1200);
-        return;
+      if (!execRes.approval_url) {
+        throw new Error('PayPal did not return a valid checkout approval URL.');
       }
 
       // Real interactive PayPal Sandbox flow
@@ -199,8 +192,15 @@ export default function EscapeWindowModal({ isOpen, onClose, intentId, onSuccess
     setCapturing(true);
     setCaptureError(null);
     try {
-      await captureIntent(intentId, orderId);
+      const capRes = await captureIntent(intentId, orderId);
       setOutcomeAlert('Payment settled on PayPal! Outcome alert dispatched to accountability partner.');
+      showToast({
+        type: 'order_success',
+        title: 'Override Payment Settled on PayPal',
+        message: 'Escape Window raid captured & settled! Accountability partner notification dispatched.',
+        details: `Order: ${orderId} · Capture: ${capRes.paypal_capture_id}`,
+        duration: 5000,
+      });
       setTimeout(() => {
         onSuccess?.();
         onClose();
@@ -216,6 +216,8 @@ export default function EscapeWindowModal({ isOpen, onClose, intentId, onSuccess
       setCapturing(false);
     }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">

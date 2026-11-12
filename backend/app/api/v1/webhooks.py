@@ -26,6 +26,8 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app.database import get_session
 from app.models.webhook import PayPalWebhookEvent
 from app.models.intent import Intent
+from app.models.bill import Bill
+from app.models.batch_payment import BatchPaymentItem
 from app.ledger.engine import LedgerEngine
 from app.services.paypal_client import paypal_client
 
@@ -121,9 +123,10 @@ async def handle_paypal_webhook(
 
             if intent:
                 await LedgerEngine.settle_hold(
-                    session,
-                    intent.id,
-                    capture_id or f"CAPTURE-{intent.id}",
+                    session=session,
+                    intent_id=intent.id,
+                    paypal_capture_id=capture_id or f"CAPTURE-{intent.id}",
+                    paypal_order_id=order_id or intent.paypal_order_id,
                     commit=False,
                 )
                 intent.status = "settled"
@@ -171,6 +174,58 @@ async def handle_paypal_webhook(
         elif event_type == "PAYMENT.PAYOUTSBATCH.SUCCESS":
             batch_id = resource.get("batch_header", {}).get("payout_batch_id")
             logger.info(f"Confirmed automated PayPal Payout delivery: batch_id={batch_id}")
+            if batch_id:
+                stmt_items = select(BatchPaymentItem).where(BatchPaymentItem.paypal_payout_id == batch_id)
+                p_items = (await session.exec(stmt_items)).all()
+                for p_it in p_items:
+                    p_it.status = "paid"
+                    p_it.paid_at = p_it.paid_at or utc_now()
+                    p_it.updated_at = utc_now()
+                    session.add(p_it)
+                    if p_it.bill_id:
+                        b_obj = (await session.exec(select(Bill).where(Bill.id == p_it.bill_id))).first()
+                        if b_obj:
+                            b_obj.status = "paid"
+                            b_obj.last_payout_batch_id = batch_id
+                            session.add(b_obj)
+                    if p_it.intent_id:
+                        i_obj = (await session.exec(select(Intent).where(Intent.id == p_it.intent_id))).first()
+                        if i_obj:
+                            i_obj.status = "settled"
+                            session.add(i_obj)
+
+        # Event: PAYMENT.PAYOUTSBATCH.DENIED -> Mark batch payment items as failed
+        elif event_type == "PAYMENT.PAYOUTSBATCH.DENIED":
+            batch_id = resource.get("batch_header", {}).get("payout_batch_id")
+            logger.warning(f"PayPal Payout Denied: batch_id={batch_id}")
+            if batch_id:
+                stmt_items = select(BatchPaymentItem).where(BatchPaymentItem.paypal_payout_id == batch_id)
+                p_items = (await session.exec(stmt_items)).all()
+                for p_it in p_items:
+                    p_it.status = "failed"
+                    p_it.error_message = "PayPal Payout Batch Denied"
+                    p_it.updated_at = utc_now()
+                    session.add(p_it)
+
+        # Event: PAYMENT.PAYOUTS-ITEM.SUCCEEDED -> Mark individual payout item confirmed
+        elif event_type == "PAYMENT.PAYOUTS-ITEM.SUCCEEDED":
+            payout_item_id = resource.get("payout_item_id")
+            transaction_id = resource.get("transaction_id")
+            batch_id = resource.get("payout_batch_id")
+            logger.info(f"PayPal Payouts Item Succeeded: item_id={payout_item_id}, tx={transaction_id}, batch={batch_id}")
+            if payout_item_id or batch_id:
+                stmt_item = select(BatchPaymentItem).where(
+                    (BatchPaymentItem.paypal_payout_item_id == payout_item_id) |
+                    (BatchPaymentItem.paypal_payout_id == batch_id)
+                )
+                matched_items = (await session.exec(stmt_item)).all()
+                for p_it in matched_items:
+                    p_it.status = "paid"
+                    if transaction_id:
+                        p_it.paypal_payout_item_id = transaction_id
+                    p_it.paid_at = p_it.paid_at or utc_now()
+                    p_it.updated_at = utc_now()
+                    session.add(p_it)
 
         # Promote webhook event status to 'processed' and commit atomically
         webhook_log.intent_id = intent_uuid

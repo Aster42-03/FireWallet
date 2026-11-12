@@ -244,3 +244,16 @@ export async function stageIntentToBatch(data) {
   }
   return res.json();
 }
+
+/**
+ * Query live PayPal status and synchronized database state for a batch payout.
+ * @param {string} payoutBatchId - PayPal Payout Batch ID
+ */
+export async function getBatchPayoutStatus(payoutBatchId) {
+  const res = await fetch(`${API_BASE}/bills/batch-dispatcher/status/${payoutBatchId}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to fetch batch payout status');
+  }
+  return res.json();
+}

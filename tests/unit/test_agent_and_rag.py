@@ -213,13 +213,24 @@ async def test_unified_coach_one_tap_actions_and_rag_context(client: httpx.Async
     assert c_data["action_card"]["amount_cents"] == 1600
     assert "rag_memory" in c_data["citations"]
 
-    # Execute 1-tap PayPal ActionCard
+    # Execute 1-tap PayPal ActionCard (creates PayPal order, returns approval_url)
     exec_pay = await client.post("/api/v1/coach/execute-action", json=c_data["action_card"])
     assert exec_pay.status_code == 200
     pay_data = exec_pay.json()
-    assert pay_data["status"] == "settled"
+    assert pay_data["status"] == "awaiting_approval"
     assert pay_data["short_tag"] == "takeout"
     assert pay_data["source_bucket"] == "freedom"
+    assert pay_data["paypal_order_id"] is not None
+    assert "approval_url" in pay_data
+
+    # Complete capture after buyer approval (Option 1 Interactive Checkout Loop)
+    cap_resp = await client.post(
+        f"/api/v1/intents/{pay_data['intent_id']}/capture",
+        json={"paypal_order_id": pay_data["paypal_order_id"]},
+    )
+    assert cap_resp.status_code == 200
+    cap_data = cap_resp.json()
+    assert cap_data["status"] == "settled"
 
     # 2. Ask Coach to sweep $30 to Vault -> returns 1-tap sweep_to_vault ActionCard
     sweep_msg = await client.post(

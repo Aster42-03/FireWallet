@@ -208,6 +208,7 @@ class LedgerEngine:
         session: AsyncSession,
         intent_id: UUID,
         paypal_capture_id: str,
+        paypal_order_id: Optional[str] = None,
         commit: bool = True
     ) -> Optional[LedgerEntry]:
         """
@@ -217,6 +218,7 @@ class LedgerEngine:
             session: Active database AsyncSession.
             intent_id: Associated Intent UUID.
             paypal_capture_id: PayPal Capture ID from webhook or capture response.
+            paypal_order_id: Optional PayPal Order ID associated with the transaction.
             commit: When True (default), commits immediately; when False, flushes within
                     caller's atomic transaction block (e.g., PayPal webhook router).
             
@@ -229,6 +231,8 @@ class LedgerEngine:
         if entry:
             entry.state = "posted"
             entry.paypal_capture_id = paypal_capture_id
+            if paypal_order_id and not entry.paypal_order_id:
+                entry.paypal_order_id = paypal_order_id
             entry.posted_at = utc_now()
             session.add(entry)
             if commit:

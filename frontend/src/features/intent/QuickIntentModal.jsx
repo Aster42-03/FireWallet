@@ -14,6 +14,7 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { submitIntent, executeIntent, captureIntent, stageIntentToBatch, getIntentOrderStatus } from '../../shared/api';
+import { useToast } from '../notifications/ToastContext';
 
 export default function QuickIntentModal({
   isOpen,
@@ -23,6 +24,7 @@ export default function QuickIntentModal({
   onOpenBatchDispatcher,
   onSuccess
 }) {
+  const { showToast } = useToast();
   const [amountStr, setAmountStr] = useState('');
   const [utterance, setUtterance] = useState('');
   const [merchant, setMerchant] = useState('');
@@ -59,8 +61,6 @@ export default function QuickIntentModal({
       setCaptureSuccess(null);
     }
   }, [isOpen]);
-
-  if (!isOpen) return null;
 
   const handleEvaluate = async (e) => {
     e.preventDefault();
@@ -115,16 +115,8 @@ export default function QuickIntentModal({
       const returnUrl = `${window.location.origin}/?paypal_return=true&intent_id=${verdict.id}`;
       const execRes = await executeIntent(verdict.id, returnUrl);
 
-      // Offline / Simulated Sandbox Mock flow
-      if (!execRes.approval_url || execRes.approval_url.includes('ORDER-MOCK')) {
-        const capRes = await captureIntent(verdict.id, execRes.paypal_order_id);
-        setCaptureSuccess({
-          captureId: capRes.paypal_capture_id,
-          orderId: execRes.paypal_order_id,
-          bucket: verdict.source_bucket || verdict.recommended_bucket || 'freedom'
-        });
-        onSuccess?.();
-        return;
+      if (!execRes.approval_url) {
+        throw new Error('PayPal did not return a valid checkout approval URL.');
       }
 
       // Real interactive PayPal Sandbox flow
@@ -150,12 +142,25 @@ export default function QuickIntentModal({
     setCaptureError(null);
     try {
       const capRes = await captureIntent(verdict.id, orderId);
+      const debitedBucket = verdict.source_bucket || verdict.recommended_bucket || 'freedom';
+      const settledCents = verdict.amount || verdict.action_card?.amount_cents || Math.round(parseFloat(amountStr || '0') * 100) || 0;
       setCaptureSuccess({
         captureId: capRes.paypal_capture_id,
         orderId: orderId,
-        bucket: verdict.source_bucket || verdict.recommended_bucket || 'freedom'
+        bucket: debitedBucket
+      });
+      showToast({
+        type: 'order_success',
+        title: 'PayPal Payment Settled',
+        message: `Payment of $${(settledCents / 100).toFixed(2)} captured & settled from ${debitedBucket} bucket.`,
+        details: `Order: ${orderId} · Capture: ${capRes.paypal_capture_id}`,
+        duration: 5000,
       });
       onSuccess?.();
+      // Auto-close modal after brief visual confirmation
+      setTimeout(() => {
+        onClose();
+      }, 1500);
     } catch (err) {
       const isUnapproved = err.message?.includes('ORDER_NOT_APPROVED');
       setCaptureError(
@@ -178,7 +183,7 @@ export default function QuickIntentModal({
     setStaging(true);
     setError(null);
     try {
-      const cents = verdict.amount || Math.round(parseFloat(amountStr || '0') * 100);
+      const cents = verdict.amount || verdict.action_card?.amount_cents || Math.round(parseFloat(amountStr || '0') * 100);
       await stageIntentToBatch({
         intent_id: verdict.id,
         recipient_email: finalEmail,
@@ -190,6 +195,13 @@ export default function QuickIntentModal({
       });
       setStagedSuccess(true);
       setShowEmailPrompt(false);
+      showToast({
+        type: 'batch_success',
+        title: 'Staged in Batch Dispatcher',
+        message: `Queued $${(cents / 100).toFixed(2)} for batch execution from isolated ${verdict.source_bucket === 'vault' ? 'Vault' : 'Reserved Bills'} reserve.`,
+        details: `Payee: ${finalEmail}`,
+        duration: 4500,
+      });
       onSuccess?.();
     } catch (err) {
       setError(err.message || 'Failed to stage into Batch Dispatcher');
@@ -200,6 +212,8 @@ export default function QuickIntentModal({
 
   const isAccepted = verdict?.verdict === 'accepted' || verdict?.status === 'allowed';
   const isRejected = verdict?.verdict === 'rejected' || verdict?.status === 'denied';
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
@@ -444,7 +458,7 @@ export default function QuickIntentModal({
                   <span>Staged in The Trinity Batch Dispatcher!</span>
                 </div>
                 <p className="text-xs text-slate-300">
-                  This obligation of <strong>${((verdict.amount || 0) / 100).toFixed(2)}</strong> is queued as <em>pending approval</em> under your isolated Reserved Bills reserve.
+                  This obligation of <strong>${(((verdict.amount || verdict.action_card?.amount_cents || Math.round(parseFloat(amountStr || '0') * 100)) || 0) / 100).toFixed(2)}</strong> is queued as <em>pending approval</em> under your isolated {verdict.source_bucket === 'vault' ? 'Vault' : 'Reserved Bills'} reserve.
                 </p>
                 {onOpenBatchDispatcher && (
                   <button

@@ -11,7 +11,6 @@ import {
   Sliders
 } from 'lucide-react';
 import { syncPayPalBalance } from '../../shared/api';
-import BatchDispatcherModal from '../bills/BatchDispatcherModal';
 
 export default function MobileHUD({
   buckets,
@@ -25,7 +24,6 @@ export default function MobileHUD({
 }) {
   const [syncing, setSyncing] = useState(false);
   const [syncNotice, setSyncNotice] = useState(null);
-  const [showBatchModal, setShowBatchModal] = useState(false);
 
   const bank = buckets?.find(b => b.kind === 'bank') || { available: 0 };
   const daily = buckets?.find(b => b.kind === 'daily') || { available: 0 };
@@ -57,11 +55,19 @@ export default function MobileHUD({
     try {
       const res = await syncPayPalBalance();
       const syncedAmt = res?.paypal_balance?.synced_cents ?? totalBalanceCents;
-      setSyncNotice(`Synced ${formatMoney(syncedAmt)} from PayPal`);
+      const isLive = res?.paypal_balance?.source === 'paypal_sandbox';
+      setSyncNotice({
+        type: 'success',
+        text: `Successfully detected & synced ${formatMoney(syncedAmt)} from ${isLive ? 'Live PayPal Sandbox' : 'Simulated Sandbox'}.`,
+        isLive
+      });
       onSyncSuccess?.();
-      setTimeout(() => setSyncNotice(null), 4000);
+      setTimeout(() => setSyncNotice(null), 6000);
     } catch (err) {
-      setSyncNotice(err.message || 'Balance sync failed');
+      setSyncNotice({
+        type: 'error',
+        text: `PayPal Sync failed: ${err.message || 'Network error'}`
+      });
     } finally {
       setSyncing(false);
     }
@@ -105,8 +111,29 @@ export default function MobileHUD({
       </div>
 
       {syncNotice && (
-        <div className="px-3.5 py-2 rounded-xl bg-emerald-950/60 border border-emerald-800/70 text-xs text-emerald-300 flex items-center justify-between">
-          <span>{syncNotice}</span>
+        <div
+          className={`px-3.5 py-2.5 rounded-xl border text-xs flex items-center justify-between animate-in fade-in ${
+            (typeof syncNotice === 'object' && syncNotice.type === 'error')
+              ? 'bg-rose-950/70 border-rose-800 text-rose-300'
+              : 'bg-emerald-950/70 border-emerald-800 text-emerald-300'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <span
+              className={`w-2 h-2 rounded-full ${
+                typeof syncNotice === 'object' && syncNotice.type === 'error'
+                  ? 'bg-rose-400'
+                  : 'bg-emerald-400 animate-pulse'
+              }`}
+            />
+            <span>{typeof syncNotice === 'object' ? syncNotice.text : syncNotice}</span>
+          </div>
+          <button
+            onClick={() => setSyncNotice(null)}
+            className="text-slate-400 hover:text-white p-0.5 ml-2"
+          >
+            &times;
+          </button>
         </div>
       )}
 
@@ -197,10 +224,7 @@ export default function MobileHUD({
               </div>
               <button
                 type="button"
-                onClick={() => {
-                  if (onOpenBatchDispatcher) onOpenBatchDispatcher();
-                  else setShowBatchModal(true);
-                }}
+                onClick={() => onOpenBatchDispatcher?.()}
                 className="text-[10px] text-sky-300 hover:text-white font-semibold flex items-center gap-1 px-1.5 py-0.5 rounded bg-sky-950/80 border border-sky-800/60 hover:bg-sky-900/70 transition-colors"
                 title="Open The Trinity Batch Dispatcher"
               >
@@ -214,10 +238,7 @@ export default function MobileHUD({
             <span>Rent &amp; utilities</span>
             <button
               type="button"
-              onClick={() => {
-                if (onOpenBatchDispatcher) onOpenBatchDispatcher();
-                else setShowBatchModal(true);
-              }}
+              onClick={() => onOpenBatchDispatcher?.()}
               className="text-sky-400/90 hover:text-sky-300 font-medium underline flex items-center gap-0.5"
             >
               <span>Batch Staging</span>
@@ -375,17 +396,6 @@ export default function MobileHUD({
           <span>Quick Intent</span>
         </button>
       </div>
-
-      {/* 8. The Trinity Batch Dispatcher Staging Modal */}
-      {showBatchModal && (
-        <BatchDispatcherModal
-          isOpen={showBatchModal}
-          onClose={() => setShowBatchModal(false)}
-          onSuccess={() => {
-            onSyncSuccess?.();
-          }}
-        />
-      )}
     </div>
   );
 }

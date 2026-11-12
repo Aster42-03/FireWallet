@@ -99,6 +99,7 @@ async def query_deep_ledger(
             Intent.merchant_name,
             Intent.necessity,
             Intent.short_tag,
+            Intent.paypal_order_id,
             Bucket.kind,
         )
         .join(Intent, LedgerEntry.intent_id == Intent.id, isouter=True)
@@ -139,7 +140,7 @@ async def query_deep_ledger(
 
     internal_kinds = {"vault_skim", "bill_reserve", "freedom_allocation", "morning_topup", "internal_transfer"}
 
-    for entry, cat, utt, merch, nec, s_tag, b_kind in paged_rows:
+    for entry, cat, utt, merch, nec, s_tag, intent_order_id, b_kind in paged_rows:
         is_internal = entry.entry_kind in internal_kinds
 
         if entry.amount < 0:
@@ -184,7 +185,7 @@ async def query_deep_ledger(
             "necessity": nec or ("bill" if entry.entry_kind == "bill_reserve" else "freedom" if entry.entry_kind == "freedom_allocation" else "daily_living"),
             "utterance": utt or entry.memo or "Transfer / Direct Post",
             "merchant": merch or (entry.counterparty_bucket if is_internal else "PayPal Merchant"),
-            "paypal_order_id": entry.paypal_order_id,
+            "paypal_order_id": entry.paypal_order_id or intent_order_id,
             "paypal_capture_id": entry.paypal_capture_id
         })
 

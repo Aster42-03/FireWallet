@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Smartphone, LayoutGrid, Sparkles, CheckCircle2, AlertTriangle, Loader2, X } from 'lucide-react';
+import { Smartphone, LayoutGrid, Sparkles } from 'lucide-react';
 import MobileHUD from './features/hud/MobileHUD';
 import BucketConfigModal from './features/hud/BucketConfigModal';
 import QuickIntentModal from './features/intent/QuickIntentModal';
@@ -8,9 +8,21 @@ import BatchDispatcherModal from './features/bills/BatchDispatcherModal';
 import { CoachDrawer } from './features/coach/CoachDrawer';
 import DeepLedgerGrid from './features/analytics/DeepLedgerGrid';
 import { fetchBuckets, fetchStatsSummary, captureIntent } from './shared/api';
+import { useToast } from './features/notifications/ToastContext';
 
 export default function App() {
-  const [view, setView] = useState('hud'); // 'hud' or 'deep-ledger'
+  const { showToast } = useToast();
+  const [view, setView] = useState(() => {
+    if (typeof window !== 'undefined') {
+      if (
+        window.location.pathname.includes('/analytics') ||
+        new URLSearchParams(window.location.search).get('view') === 'deep-ledger'
+      ) {
+        return 'deep-ledger';
+      }
+    }
+    return 'hud';
+  });
   const [buckets, setBuckets] = useState([
     { kind: 'bank', name: 'Bank Foundation', available: 0 },
     { kind: 'daily', name: 'Daily', available: 0 },
@@ -21,14 +33,15 @@ export default function App() {
   const [stats, setStats] = useState(null);
   const [ledgerRefreshTick, setLedgerRefreshTick] = useState(0);
 
-  // PayPal redirect outcome banner
-  const [paypalNotice, setPaypalNotice] = useState(null);
-
   // Modals state
-  const [isIntentOpen, setIsIntentOpen] = useState(false);
+  const [isIntentOpen, setIsIntentOpen] = useState(() => {
+    return typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('modal') === 'intent';
+  });
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [isOverrideOpen, setIsOverrideOpen] = useState(false);
-  const [isBatchDispatcherOpen, setIsBatchDispatcherOpen] = useState(false);
+  const [isBatchDispatcherOpen, setIsBatchDispatcherOpen] = useState(() => {
+    return typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('modal') === 'batch';
+  });
   const [activeOverrideIntentId, setActiveOverrideIntentId] = useState(null);
 
   // Coach Drawer state
@@ -63,10 +76,12 @@ export default function App() {
     const intentId = params.get('intent_id');
 
     if (isReturn && token && intentId) {
-      setPaypalNotice({
+      showToast({
         type: 'processing',
+        title: 'Verifying PayPal Checkout',
         message: 'Verifying and capturing PayPal sandbox payment...',
-        details: `Order: ${token}`
+        details: `Order: ${token}`,
+        duration: 4000,
       });
 
       // Clear search params from URL so refresh does not re-trigger
@@ -74,38 +89,38 @@ export default function App() {
 
       captureIntent(intentId, token, payerId)
         .then((res) => {
-          setPaypalNotice({
-            type: 'success',
-            message: 'PayPal payment approved & captured successfully! Ledger updated.',
-            details: `Order: ${res.paypal_order_id || token} · Capture: ${res.paypal_capture_id}`
+          showToast({
+            type: 'order_success',
+            title: 'PayPal Payment Settled',
+            message: 'PayPal payment approved & captured successfully! Double-entry ledger updated.',
+            details: `Order: ${res.paypal_order_id || token} · Capture: ${res.paypal_capture_id}`,
+            duration: 5000,
           });
           loadData();
-          setTimeout(() => {
-            setPaypalNotice(null);
-          }, 8000);
         })
         .catch((err) => {
           const isUnapproved = err.message?.includes('ORDER_NOT_APPROVED');
-          setPaypalNotice({
+          showToast({
             type: 'error',
+            title: isUnapproved ? 'Order Not Approved' : 'PayPal Capture Failed',
             message: isUnapproved
               ? 'PayPal Order not approved yet. Buyer approval was not completed.'
               : `PayPal capture failed: ${err.message || 'Unknown error'}`,
-            details: `Order: ${token}`
+            details: `Order: ${token}`,
+            duration: 6000,
           });
         });
     } else if (isCancel) {
-      setPaypalNotice({
+      showToast({
         type: 'cancel',
+        title: 'PayPal Checkout Cancelled',
         message: 'PayPal checkout was cancelled. No funds were debited.',
-        details: token ? `Order: ${token}` : null
+        details: token ? `Order: ${token}` : null,
+        duration: 4500,
       });
       window.history.replaceState({}, document.title, window.location.pathname);
-      setTimeout(() => {
-        setPaypalNotice(null);
-      }, 6000);
     }
-  }, [loadData]);
+  }, [loadData, showToast]);
 
   const handleOpenCoachWithQuery = useCallback((query, chartId = null, filterContext = null) => {
     if (!query) {
@@ -192,42 +207,6 @@ export default function App() {
           </div>
         </div>
       </header>
-
-      {/* PayPal Redirect Feedback Notification Banner */}
-      {paypalNotice && (
-        <div
-          className={`px-4 py-3 border-b flex items-center justify-between text-xs transition-all animate-in fade-in ${
-            paypalNotice.type === 'processing'
-              ? 'bg-amber-950/80 border-amber-800 text-amber-200'
-              : paypalNotice.type === 'success'
-              ? 'bg-emerald-950/80 border-emerald-800 text-emerald-200'
-              : paypalNotice.type === 'cancel'
-              ? 'bg-slate-900 border-slate-700 text-slate-300'
-              : 'bg-rose-950/80 border-rose-800 text-rose-200'
-          }`}
-        >
-          <div className="max-w-[1440px] mx-auto w-full flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5">
-              {paypalNotice.type === 'processing' && <Loader2 className="w-4 h-4 animate-spin text-amber-400" />}
-              {paypalNotice.type === 'success' && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
-              {paypalNotice.type === 'cancel' && <AlertTriangle className="w-4 h-4 text-slate-400" />}
-              {paypalNotice.type === 'error' && <AlertTriangle className="w-4 h-4 text-rose-400" />}
-              <div>
-                <span className="font-bold">{paypalNotice.message}</span>
-                {paypalNotice.details && (
-                  <span className="font-mono text-[11px] opacity-80 ml-2">({paypalNotice.details})</span>
-                )}
-              </div>
-            </div>
-            <button
-              onClick={() => setPaypalNotice(null)}
-              className="text-slate-400 hover:text-white p-1 rounded-lg transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Main View Area */}
       <main className="flex-1">

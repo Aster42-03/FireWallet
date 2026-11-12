@@ -762,3 +762,102 @@ async def test_ai_coach_stages_payment_from_chat(
     assert item.amount_minor == 7500
     assert item.status == "pending_approval"
     assert item.source_bucket == "bills"
+
+
+@pytest.mark.api
+async def test_batch_dispatcher_status_endpoint_syncs_db(
+    client: httpx.AsyncClient,
+    seeded_session: AsyncSession,
+):
+    """
+    Verifies GET /api/v1/bills/batch-dispatcher/status/{payout_batch_id} queries PayPal
+    and atomically synchronizes BatchPaymentItem status to 'paid'.
+    """
+    user = (await seeded_session.exec(select(User))).first()
+    batch_id = f"PAYOUT-MOCK-{uuid4().hex[:12]}"
+
+    item = BatchPaymentItem(
+        user_id=user.id,
+        title="Quarterly Cloud Hosting",
+        amount_minor=15000,
+        category="Infrastructure",
+        source_bucket="bills",
+        status="executing",
+        paypal_payout_id=batch_id,
+        recipient_email="cloud@sandbox.paypal.com",
+    )
+    seeded_session.add(item)
+    await seeded_session.commit()
+
+    resp = await client.get(f"/api/v1/bills/batch-dispatcher/status/{batch_id}")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["payout_batch_id"] == batch_id
+    assert data["batch_status"] == "SUCCESS"
+
+    # Verify item status synchronized in database
+    await seeded_session.refresh(item)
+    assert item.status == "paid"
+    assert item.paid_at is not None
+
+
+@pytest.mark.api
+async def test_batch_dispatcher_status_endpoint_syncs_linked_bills_and_intents(
+    client: httpx.AsyncClient,
+    seeded_session: AsyncSession,
+):
+    """
+    Verifies that settling a batch payout updates linked Bill to 'paid'
+    and linked Intent to 'settled'.
+    """
+    user = (await seeded_session.exec(select(User))).first()
+    batch_id = f"PAYOUT-MOCK-{uuid4().hex[:12]}"
+
+    bill = Bill(
+        user_id=user.id,
+        name="Water Utility",
+        amount=4500,
+        due_date=date.today(),
+        payee_email="water@sandbox.paypal.com",
+        status="scheduled",
+    )
+    intent = Intent(
+        user_id=user.id,
+        utterance="Water Utility payment",
+        amount=4500,
+        status="allowed",
+    )
+    seeded_session.add(bill)
+    seeded_session.add(intent)
+    await seeded_session.commit()
+    await seeded_session.refresh(bill)
+    await seeded_session.refresh(intent)
+
+    item = BatchPaymentItem(
+        user_id=user.id,
+        bill_id=bill.id,
+        intent_id=intent.id,
+        title="Water Utility",
+        amount_minor=4500,
+        category="Utilities",
+        source_bucket="bills",
+        status="executing",
+        paypal_payout_id=batch_id,
+        recipient_email="water@sandbox.paypal.com",
+    )
+    seeded_session.add(item)
+    await seeded_session.commit()
+
+    resp = await client.get(f"/api/v1/bills/batch-dispatcher/status/{batch_id}")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["batch_status"] == "SUCCESS"
+
+    await seeded_session.refresh(item)
+    await seeded_session.refresh(bill)
+    await seeded_session.refresh(intent)
+
+    assert item.status == "paid"
+    assert bill.status == "paid"
+    assert bill.last_payout_batch_id == batch_id
+    assert intent.status == "settled"

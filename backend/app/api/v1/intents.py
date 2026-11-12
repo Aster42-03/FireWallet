@@ -24,6 +24,7 @@ from app.database import get_session
 from app.models.user import User, BudgetPolicy
 from app.models.intent import Intent
 from app.models.bucket import Bucket
+from app.models.ledger import LedgerEntry
 from app.schemas.common import (
     ActionCard,
     IntentCaptureRequest,
@@ -177,6 +178,8 @@ async def submit_intent(
         "id": intent.id,
         "status": intent.status,
         "verdict": verdict,
+        "amount": body.amount,
+        "currency": body.currency,
         "short_tag": intent.short_tag,
         "category": intent.category,
         "necessity": intent.necessity,
@@ -379,9 +382,22 @@ async def execute_intent(
         cancel_url=custom_cancel,
     )
 
-    intent.paypal_order_id = order_res.get("id")
+    order_id = order_res.get("id")
+    intent.paypal_order_id = order_id
     intent.status = "executing"
     session.add(intent)
+
+    # Propagate PayPal Order ID directly to the LedgerEntry hold record
+    hold_stmt = (
+        select(LedgerEntry)
+        .where(LedgerEntry.intent_id == intent.id)
+        .where(LedgerEntry.state == "hold")
+    )
+    hold_entry = (await session.exec(hold_stmt)).first()
+    if hold_entry:
+        hold_entry.paypal_order_id = order_id
+        session.add(hold_entry)
+
     await session.commit()
 
     approval_url = next(
@@ -506,10 +522,18 @@ async def capture_intent(
         )
 
     if not capture_id:
-        capture_id = f"CAPTURE-{body.paypal_order_id[:8]}"
+        raise HTTPException(
+            status_code=502,
+            detail="PayPal completed transaction but did not return a valid Capture ID.",
+        )
 
     # Database confirmation: ONLY settle ledger and mark intent settled AFTER PayPal confirms COMPLETED
-    await LedgerEngine.settle_hold(session, intent.id, capture_id)
+    await LedgerEngine.settle_hold(
+        session=session,
+        intent_id=intent.id,
+        paypal_capture_id=capture_id,
+        paypal_order_id=body.paypal_order_id or intent.paypal_order_id,
+    )
 
     intent.status = "settled"
     session.add(intent)

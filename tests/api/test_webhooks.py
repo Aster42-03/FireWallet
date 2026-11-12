@@ -1,5 +1,6 @@
 import json
 import uuid
+from datetime import date
 import pytest
 import httpx
 from sqlmodel import select
@@ -8,6 +9,8 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app.models.intent import Intent
 from app.models.bucket import Bucket
 from app.models.ledger import LedgerEntry
+from app.models.bill import Bill
+from app.models.batch_payment import BatchPaymentItem
 from app.models.webhook import PayPalWebhookEvent
 from app.ledger.engine import LedgerEngine
 
@@ -379,3 +382,112 @@ async def test_paypal_webhook_atomic_rollback_and_500_on_settlement_error(
 
     await seeded_session.refresh(hold_entry)
     assert hold_entry.state == "posted"
+
+
+@pytest.mark.api
+async def test_paypal_webhook_payouts_batch_success_promotes_items(
+    client: httpx.AsyncClient,
+    seeded_session: AsyncSession,
+):
+    """
+    Verify that PAYMENT.PAYOUTSBATCH.SUCCESS webhook updates BatchPaymentItem
+    and linked Bill records to 'paid'.
+    """
+    stmt_b = select(Bucket).where(Bucket.kind == "bills")
+    bucket = (await seeded_session.exec(stmt_b)).first()
+    assert bucket is not None
+
+    batch_id = f"PAYOUT-WH-{uuid.uuid4().hex[:12]}"
+    bill = Bill(
+        user_id=bucket.user_id,
+        name="Quarterly Insurance",
+        amount=22000,
+        due_date=date(2026, 12, 1),
+        payee_email="insurance@sandbox.paypal.com",
+        status="scheduled",
+    )
+    seeded_session.add(bill)
+    await seeded_session.commit()
+    await seeded_session.refresh(bill)
+
+    item = BatchPaymentItem(
+        user_id=bucket.user_id,
+        bill_id=bill.id,
+        title="Quarterly Insurance",
+        amount_minor=22000,
+        source_bucket="bills",
+        status="executing",
+        paypal_payout_id=batch_id,
+    )
+    seeded_session.add(item)
+    await seeded_session.commit()
+    await seeded_session.refresh(item)
+
+    event_id = f"WH-PAYOUT-SUCCESS-{uuid.uuid4()}"
+    payload = {
+        "id": event_id,
+        "event_type": "PAYMENT.PAYOUTSBATCH.SUCCESS",
+        "resource": {
+            "batch_header": {
+                "payout_batch_id": batch_id,
+                "batch_status": "SUCCESS"
+            }
+        }
+    }
+
+    resp = await client.post("/api/v1/webhooks/paypal", json=payload)
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "processed"
+
+    await seeded_session.refresh(item)
+    await seeded_session.refresh(bill)
+    assert item.status == "paid"
+    assert bill.status == "paid"
+    assert bill.last_payout_batch_id == batch_id
+
+
+@pytest.mark.api
+async def test_paypal_webhook_payouts_batch_denied_marks_failed(
+    client: httpx.AsyncClient,
+    seeded_session: AsyncSession,
+):
+    """
+    Verify that PAYMENT.PAYOUTSBATCH.DENIED webhook updates BatchPaymentItem
+    records to 'failed'.
+    """
+    stmt_b = select(Bucket).where(Bucket.kind == "bills")
+    bucket = (await seeded_session.exec(stmt_b)).first()
+    assert bucket is not None
+
+    batch_id = f"PAYOUT-WH-DENY-{uuid.uuid4().hex[:12]}"
+    item = BatchPaymentItem(
+        user_id=bucket.user_id,
+        title="Denied Server Bill",
+        amount_minor=8500,
+        source_bucket="bills",
+        status="executing",
+        paypal_payout_id=batch_id,
+    )
+    seeded_session.add(item)
+    await seeded_session.commit()
+    await seeded_session.refresh(item)
+
+    event_id = f"WH-PAYOUT-DENIED-{uuid.uuid4()}"
+    payload = {
+        "id": event_id,
+        "event_type": "PAYMENT.PAYOUTSBATCH.DENIED",
+        "resource": {
+            "batch_header": {
+                "payout_batch_id": batch_id,
+                "batch_status": "DENIED"
+            }
+        }
+    }
+
+    resp = await client.post("/api/v1/webhooks/paypal", json=payload)
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "processed"
+
+    await seeded_session.refresh(item)
+    assert item.status == "failed"
+    assert "denied" in item.error_message.lower()

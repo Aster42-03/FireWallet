@@ -13,10 +13,13 @@ import {
   Ban,
   ArrowRight
 } from 'lucide-react';
+import { useToast } from '../notifications/ToastContext';
+import { getBatchPayoutStatus } from '../../shared/api';
 
 const formatMoney = (cents) => `$${((cents || 0) / 100).toFixed(2)}`;
 
 export default function BatchDispatcherModal({ isOpen, onClose, onSuccess }) {
+  const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [executing, setExecuting] = useState(false);
@@ -25,6 +28,7 @@ export default function BatchDispatcherModal({ isOpen, onClose, onSuccess }) {
   const [approvedItemIds, setApprovedItemIds] = useState(new Set());
   const [sourceBucket, setSourceBucket] = useState('bills');
   const [executionSummary, setExecutionSummary] = useState(null);
+  const [pollingStatus, setPollingStatus] = useState(false);
   const [error, setError] = useState(null);
 
   // Load staging proposal & active queue
@@ -79,6 +83,83 @@ export default function BatchDispatcherModal({ isOpen, onClose, onSuccess }) {
     }
     loadStagingData();
   }, [isOpen]);
+
+  // Live PayPal Payout status polling loop (PENDING / PROCESSING -> SUCCESS)
+  useEffect(() => {
+    let isMounted = true;
+    let pollTimer = null;
+    let attempts = 0;
+    const maxAttempts = 15;
+
+    const poll = async () => {
+      const batchId = executionSummary?.payout_batch_id;
+      const currentStatus = executionSummary?.batch_status;
+
+      if (!batchId || !['PENDING', 'PROCESSING'].includes(currentStatus)) {
+        if (isMounted) setPollingStatus(false);
+        return;
+      }
+
+      if (attempts >= maxAttempts) {
+        if (isMounted) setPollingStatus(false);
+        return;
+      }
+
+      attempts += 1;
+      if (isMounted) setPollingStatus(true);
+
+      try {
+        const statusData = await getBatchPayoutStatus(batchId);
+        if (!isMounted) return;
+
+        if (statusData && statusData.batch_status && statusData.batch_status !== currentStatus) {
+          setExecutionSummary((prev) => ({
+            ...prev,
+            batch_status: statusData.batch_status,
+            time_completed: statusData.time_completed,
+            fees: statusData.fees,
+            total_amount: statusData.total_amount,
+            items: statusData.items || prev?.items,
+            message:
+              statusData.batch_status === 'SUCCESS'
+                ? `Batch payout fully settled and confirmed by PayPal Sandbox!`
+                : prev?.message,
+          }));
+
+          if (statusData.batch_status === 'SUCCESS') {
+            showToast({
+              type: 'batch_success',
+              title: 'PayPal Batch Completed',
+              message: `Batch ${batchId} settled successfully! (Status: SUCCESS)`,
+              details: statusData.fees ? `PayPal Fee: $${statusData.fees} · Reserve Released` : 'Reserve Released',
+              duration: 6000,
+            });
+            onSuccess?.();
+            setPollingStatus(false);
+            return;
+          } else if (['DENIED', 'CANCELED', 'PARTIAL'].includes(statusData.batch_status)) {
+            setPollingStatus(false);
+            return;
+          }
+        }
+      } catch (pollErr) {
+        console.warn('Batch status polling error:', pollErr);
+      }
+
+      if (isMounted) {
+        pollTimer = setTimeout(poll, 2500);
+      }
+    };
+
+    if (executionSummary?.payout_batch_id && ['PENDING', 'PROCESSING'].includes(executionSummary?.batch_status)) {
+      pollTimer = setTimeout(poll, 2500);
+    }
+
+    return () => {
+      isMounted = false;
+      if (pollTimer) clearTimeout(pollTimer);
+    };
+  }, [executionSummary?.payout_batch_id, executionSummary?.batch_status]);
 
   if (!isOpen) return null;
 
@@ -136,6 +217,14 @@ export default function BatchDispatcherModal({ isOpen, onClose, onSuccess }) {
       }
 
       setExecutionSummary(data);
+
+      showToast({
+        type: 'batch_success',
+        title: 'Batch Payouts Dispatched',
+        message: `Successfully executed batch of ${data.executed_count} obligations (${formatMoney(data.total_amount_minor)}) via PayPal Payouts!`,
+        details: `Reserve: ${sourceBucket === 'vault' ? 'Vault' : 'Reserved Bills'} · Bank Foundation Untouched`,
+        duration: 5000,
+      });
 
       // Refresh queue after dispatch
       const qRes = await fetch('/api/v1/bills/batch-dispatcher/queue');
@@ -354,7 +443,7 @@ export default function BatchDispatcherModal({ isOpen, onClose, onSuccess }) {
                             )}
                           </div>
                           <p className="text-[11px] text-slate-400 mt-0.5">
-                            Payee: <span className="text-slate-300">{item.recipient_email || item.payee_email || 'Unspecified'}</span>
+                            Payee: <span className="text-slate-300 font-mono text-[10px]">{item.recipient_email || item.payee_email || 'sb-ic47fn53813143@personal.example.com'}</span>
                             {item.due_date && <span> &bull; Due: {item.due_date}</span>}
                           </p>
                         </div>
@@ -377,14 +466,26 @@ export default function BatchDispatcherModal({ isOpen, onClose, onSuccess }) {
             )}
           </div>
 
-          {/* Sequential Execution Summary */}
+          {/* PayPal Batch Execution Summary */}
           {executionSummary && (
-            <div className="p-4 rounded-xl bg-emerald-950/30 border border-emerald-800/60 space-y-3">
+            <div className={`p-4 rounded-xl border space-y-3 ${
+              executionSummary.batch_status === 'SUCCESS'
+                ? 'bg-emerald-950/40 border-emerald-500/50'
+                : 'bg-sky-950/30 border-sky-800/60'
+            }`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  <span className="text-xs font-semibold text-emerald-300 uppercase tracking-wider">
-                    Sequential Dispatch Completed
+                  {executionSummary.batch_status === 'SUCCESS' ? (
+                    <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                  ) : (
+                    <Loader2 className="w-4 h-4 text-sky-400 animate-spin" />
+                  )}
+                  <span className={`text-xs font-bold uppercase tracking-wider ${
+                    executionSummary.batch_status === 'SUCCESS' ? 'text-emerald-300' : 'text-sky-300'
+                  }`}>
+                    {executionSummary.batch_status === 'SUCCESS'
+                      ? 'PayPal Batch Payout Completed'
+                      : 'PayPal Batch Payout Dispatched · Settling'}
                   </span>
                 </div>
                 <span className="text-xs font-bold text-white">
@@ -392,6 +493,37 @@ export default function BatchDispatcherModal({ isOpen, onClose, onSuccess }) {
                 </span>
               </div>
               <p className="text-xs text-slate-300">{executionSummary.message}</p>
+
+              {executionSummary.payout_batch_id && (
+                <div className="text-[11px] font-mono text-sky-300 bg-slate-900/90 border border-slate-700/60 rounded-lg px-2.5 py-2 flex items-center justify-between select-all">
+                  <div className="flex flex-col">
+                    <span className="text-[10px] text-slate-400 font-sans">PayPal Payout Batch ID:</span>
+                    <span className="font-semibold text-white">{executionSummary.payout_batch_id}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {pollingStatus && (
+                      <span className="text-[10px] text-sky-400 flex items-center gap-1 font-sans">
+                        <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                        Polling settlement...
+                      </span>
+                    )}
+                    <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded border ${
+                      executionSummary.batch_status === 'SUCCESS'
+                        ? 'bg-emerald-950 text-emerald-300 border-emerald-500'
+                        : 'bg-amber-950 text-amber-300 border-amber-600'
+                    }`}>
+                      {executionSummary.batch_status || 'PENDING'}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {executionSummary.time_completed && (
+                <div className="text-[10px] text-emerald-400 flex items-center justify-between px-1 bg-emerald-950/20 py-1 rounded border border-emerald-900/40">
+                  <span>Settled: {new Date(executionSummary.time_completed).toLocaleTimeString()}</span>
+                  {executionSummary.fees && <span>PayPal Fee: ${executionSummary.fees}</span>}
+                </div>
+              )}
 
               {executionSummary.results && executionSummary.results.length > 0 && (
                 <div className="space-y-1.5 pt-1">
@@ -404,7 +536,7 @@ export default function BatchDispatcherModal({ isOpen, onClose, onSuccess }) {
                       <div className="flex items-center gap-2">
                         {res.status === 'paid' ? (
                           <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-950 text-emerald-300 border border-emerald-800">
-                            Paid ({res.paypal_payout_id || 'SUCCESS'})
+                            {executionSummary.batch_status === 'SUCCESS' ? 'Settled (SUCCESS)' : 'Dispatched'}
                           </span>
                         ) : (
                           <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-950 text-rose-300 border border-rose-800">
