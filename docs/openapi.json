@@ -1,0 +1,3838 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "FireWallet",
+    "description": "Proactive Financial Firewall & AI Coach powered by the Trinity Bucket Engine",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v1/me": {
+      "get": {
+        "tags": [
+          "Auth & Policy"
+        ],
+        "summary": "Get Me",
+        "operationId": "get_me_api_v1_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Get Me Api V1 Me Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me/policy": {
+      "get": {
+        "tags": [
+          "Auth & Policy"
+        ],
+        "summary": "Get Policy",
+        "operationId": "get_policy_api_v1_me_policy_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Get Policy Api V1 Me Policy Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Auth & Policy"
+        ],
+        "summary": "Update Policy",
+        "operationId": "update_policy_api_v1_me_policy_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolicyUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Update Policy Api V1 Me Policy Put"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Auth & Policy"
+        ],
+        "summary": "Update Policy",
+        "operationId": "update_policy_api_v1_me_policy_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolicyUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Update Policy Api V1 Me Policy Patch"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/buckets": {
+      "get": {
+        "tags": [
+          "Buckets & Ledger"
+        ],
+        "summary": "Get Buckets",
+        "description": "Retrieve available and held balances across all Trinity buckets.",
+        "operationId": "get_buckets_api_v1_buckets_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Get Buckets Api V1 Buckets Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ledger": {
+      "get": {
+        "tags": [
+          "Buckets & Ledger"
+        ],
+        "summary": "Get Ledger",
+        "description": "Paginated double-entry ledger entries.",
+        "operationId": "get_ledger_api_v1_ledger_get",
+        "parameters": [
+          {
+            "name": "bucket",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Bucket"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Ledger Api V1 Ledger Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/intents": {
+      "post": {
+        "tags": [
+          "Intent Firewall"
+        ],
+        "summary": "Submit Intent",
+        "description": "Submits a natural language spend intent for proactive single-call AI classification,\n`short_tag` recording, deterministic rule verification, and 1-tap `ActionCard` generation.",
+        "operationId": "submit_intent_api_v1_intents_post",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IntentCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntentResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/intents/tags": {
+      "get": {
+        "tags": [
+          "Intent Firewall"
+        ],
+        "summary": "List Recorded Short Tags",
+        "description": "Returns recorded `short_tag` items and rolled-up category frequencies so both\nthe user and the Coach can review historical tags ('groceries', 'takeout', etc.).",
+        "operationId": "list_recorded_short_tags_api_v1_intents_tags_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response List Recorded Short Tags Api V1 Intents Tags Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/intents/{intent_id}": {
+      "get": {
+        "tags": [
+          "Intent Firewall"
+        ],
+        "summary": "Get Intent Status",
+        "operationId": "get_intent_status_api_v1_intents__intent_id__get",
+        "parameters": [
+          {
+            "name": "intent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intent Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Intent Status Api V1 Intents  Intent Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/intents/{intent_id}/confirm": {
+      "post": {
+        "tags": [
+          "Intent Firewall"
+        ],
+        "summary": "Confirm Intent",
+        "operationId": "confirm_intent_api_v1_intents__intent_id__confirm_post",
+        "parameters": [
+          {
+            "name": "intent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intent Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Confirm Intent Api V1 Intents  Intent Id  Confirm Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/intents/{intent_id}/execute": {
+      "post": {
+        "tags": [
+          "Intent Firewall"
+        ],
+        "summary": "Execute Intent",
+        "operationId": "execute_intent_api_v1_intents__intent_id__execute_post",
+        "parameters": [
+          {
+            "name": "intent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intent Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/IntentExecuteRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntentExecuteResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/intents/{intent_id}/order-status": {
+      "get": {
+        "tags": [
+          "Intent Firewall"
+        ],
+        "summary": "Get Intent Order Status",
+        "description": "Checks the live PayPal Orders v2 status (CREATED, APPROVED, COMPLETED)\nto confirm whether the sandbox buyer has completed approval.",
+        "operationId": "get_intent_order_status_api_v1_intents__intent_id__order_status_get",
+        "parameters": [
+          {
+            "name": "intent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intent Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntentOrderStatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/intents/{intent_id}/capture": {
+      "post": {
+        "tags": [
+          "Intent Firewall"
+        ],
+        "summary": "Capture Intent",
+        "description": "Captures an approved PayPal Order v2.\nConfirms transaction completion with PayPal before settling the ledger or updating the database.",
+        "operationId": "capture_intent_api_v1_intents__intent_id__capture_post",
+        "parameters": [
+          {
+            "name": "intent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intent Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IntentCaptureRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Capture Intent Api V1 Intents  Intent Id  Capture Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/overrides": {
+      "post": {
+        "tags": [
+          "Escape Window Overrides"
+        ],
+        "summary": "Create Override",
+        "operationId": "create_override_api_v1_overrides_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OverrideCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerOverrideResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/overrides/{override_id}/check-cooldown": {
+      "post": {
+        "tags": [
+          "Escape Window Overrides"
+        ],
+        "summary": "Check Cooldown",
+        "description": "Verify if cooldown elapsed or partner approved, and unlock the intent for execution.",
+        "operationId": "check_cooldown_api_v1_overrides__override_id__check_cooldown_post",
+        "parameters": [
+          {
+            "name": "override_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Override Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Check Cooldown Api V1 Overrides  Override Id  Check Cooldown Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/overrides/{override_id}/cancel": {
+      "post": {
+        "tags": [
+          "Escape Window Overrides"
+        ],
+        "summary": "Cancel Override",
+        "description": "Cancel override and dispatch partner outcome alert.",
+        "operationId": "cancel_override_api_v1_overrides__override_id__cancel_post",
+        "parameters": [
+          {
+            "name": "override_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Override Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Cancel Override Api V1 Overrides  Override Id  Cancel Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/bills": {
+      "get": {
+        "tags": [
+          "Bills"
+        ],
+        "summary": "List Bills",
+        "operationId": "list_bills_api_v1_bills_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "title": "Response List Bills Api V1 Bills Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Bills"
+        ],
+        "summary": "Create Bill",
+        "operationId": "create_bill_api_v1_bills_post",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          },
+          {
+            "name": "amount",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Amount"
+            }
+          },
+          {
+            "name": "due_date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "Due Date"
+            }
+          },
+          {
+            "name": "payee_email",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Payee Email"
+            }
+          },
+          {
+            "name": "priority",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 1,
+              "title": "Priority"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Create Bill Api V1 Bills Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/bills/{bill_id}/pay": {
+      "post": {
+        "tags": [
+          "Bills"
+        ],
+        "summary": "Pay Bill Now",
+        "operationId": "pay_bill_now_api_v1_bills__bill_id__pay_post",
+        "parameters": [
+          {
+            "name": "bill_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Bill Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Pay Bill Now Api V1 Bills  Bill Id  Pay Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/bills/batch-dispatcher/propose": {
+      "post": {
+        "tags": [
+          "Bills"
+        ],
+        "summary": "Propose Batch",
+        "description": "Stage upcoming scheduled bills and unstaged recurring obligations into the Batch Dispatcher\nand return a structured BatchDispatcherProposal with risk assessment verifying Bank Foundation is untouched.",
+        "operationId": "propose_batch_api_v1_bills_batch_dispatcher_propose_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchDispatcherProposal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/bills/batch-dispatcher/stage-intent": {
+      "post": {
+        "tags": [
+          "Bills"
+        ],
+        "summary": "Stage Intent",
+        "description": "Stage a verified Intent or custom recurring obligation into the Batch Dispatcher\nstaging queue as a BatchPaymentItem (status='pending_approval').",
+        "operationId": "stage_intent_api_v1_bills_batch_dispatcher_stage_intent_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchStageIntentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchStageIntentResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/bills/batch-dispatcher/queue": {
+      "get": {
+        "tags": [
+          "Bills"
+        ],
+        "summary": "Get Batch Queue",
+        "description": "List staged batch items for the user along with isolated balances.",
+        "operationId": "get_batch_queue_api_v1_bills_batch_dispatcher_queue_get",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Batch Queue Api V1 Bills Batch Dispatcher Queue Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/bills/batch-dispatcher/execute": {
+      "post": {
+        "tags": [
+          "Bills"
+        ],
+        "summary": "Execute Batch",
+        "description": "Execute payouts for approved batch items sequentially via PayPal Payouts API.\nEnforces blast radius containment (strictly bills/vault), live sandbox connectivity,\nand double-entry ledger debit recording.",
+        "operationId": "execute_batch_api_v1_bills_batch_dispatcher_execute_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchExecuteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchExecutionSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/bills/batch-dispatcher/status/{payout_batch_id}": {
+      "get": {
+        "tags": [
+          "Bills"
+        ],
+        "summary": "Get Batch Dispatcher Status",
+        "description": "Check live PayPal Sandbox batch payout status and synchronize database records.\nGET /v1/payments/payouts/{payout_batch_id}",
+        "operationId": "get_batch_dispatcher_status_api_v1_bills_batch_dispatcher_status__payout_batch_id__get",
+        "parameters": [
+          {
+            "name": "payout_batch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Payout Batch Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchStatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/stats/summary": {
+      "get": {
+        "tags": [
+          "HUD Analytics"
+        ],
+        "summary": "Get Summary",
+        "description": "Retrieve HUD chart metrics, category spend, and rollover series.",
+        "operationId": "get_summary_api_v1_stats_summary_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Get Summary Api V1 Stats Summary Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/analytics/deep-ledger": {
+      "get": {
+        "tags": [
+          "Deep Analytics & AG Grid"
+        ],
+        "summary": "Get Deep Ledger",
+        "description": "Primary data source for the Desktop AG Grid 'Advanced Ledger & Audit Log' view.\nReturns double-entry transaction items with running balances, audit correlation IDs,\nzero-sum verification, and spending velocity metrics.",
+        "operationId": "get_deep_ledger_api_v1_analytics_deep_ledger_get",
+        "parameters": [
+          {
+            "name": "bucket",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by bucket kind ('bank', 'daily', etc.)",
+              "title": "Bucket"
+            },
+            "description": "Filter by bucket kind ('bank', 'daily', etc.)"
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by transaction state ('posted', 'hold', 'released')",
+              "title": "State"
+            },
+            "description": "Filter by transaction state ('posted', 'hold', 'released')"
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by category ('groceries', 'utilities', etc.)",
+              "title": "Category"
+            },
+            "description": "Filter by category ('groceries', 'utilities', etc.)"
+          },
+          {
+            "name": "entry_kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by entry kind ('merchant_spend', 'vault_skim', etc.)",
+              "title": "Entry Kind"
+            },
+            "description": "Filter by entry kind ('merchant_spend', 'vault_skim', etc.)"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Earliest ISO timestamp",
+              "title": "From"
+            },
+            "description": "Earliest ISO timestamp"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Latest ISO timestamp",
+              "title": "To"
+            },
+            "description": "Latest ISO timestamp"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "description": "Page size limit",
+              "default": 100,
+              "title": "Limit"
+            },
+            "description": "Page size limit"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "Offset for pagination",
+              "default": 0,
+              "title": "Offset"
+            },
+            "description": "Offset for pagination"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeepLedgerResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/analytics/anomalies": {
+      "get": {
+        "tags": [
+          "Deep Analytics & AG Grid"
+        ],
+        "summary": "Get Anomalies",
+        "description": "Detects unusual spending spikes exceeding 1.5 standard deviations (>1.5 sigma) above historical mean.",
+        "operationId": "get_anomalies_api_v1_analytics_anomalies_get",
+        "parameters": [
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by spending category",
+              "title": "Category"
+            },
+            "description": "Filter by spending category"
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "Rolling lookback window in days",
+              "default": 30,
+              "title": "Days"
+            },
+            "description": "Rolling lookback window in days"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Anomalies Api V1 Analytics Anomalies Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/coach/status": {
+      "get": {
+        "tags": [
+          "Financial Coach"
+        ],
+        "summary": "Get Coach Status",
+        "description": "Returns active LLM provider, configured model, and live connectivity status.",
+        "operationId": "get_coach_status_api_v1_coach_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/coach/messages": {
+      "post": {
+        "tags": [
+          "Financial Coach"
+        ],
+        "summary": "Post Coach Message",
+        "description": "Send conversational query to the Unified Trinity Coach (`CoachDecision` + RAG + 1-tap ActionCard).",
+        "operationId": "post_coach_message_api_v1_coach_messages_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CoachMessageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoachMessageResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/coach/execute-action": {
+      "post": {
+        "tags": [
+          "Financial Coach"
+        ],
+        "summary": "Execute Coach Action",
+        "description": "Executes a pre-configured 1-tap `ActionCard` generated by the Coach after\ndeterministic `LedgerEngine` verification:\n- `sweep_to_vault`: Zero-sum double-entry transfer from `bank` -> `vault`.\n- `paypal_checkout`: Places hold, creates PayPal Sandbox order, and optionally captures/settles.",
+        "operationId": "execute_coach_action_api_v1_coach_execute_action_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CoachExecuteActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoachExecuteActionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/coach/threads": {
+      "get": {
+        "tags": [
+          "Financial Coach"
+        ],
+        "summary": "List Threads",
+        "operationId": "list_threads_api_v1_coach_threads_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "type": "array",
+                  "title": "Response List Threads Api V1 Coach Threads Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/coach/threads/{thread_id}/messages": {
+      "get": {
+        "tags": [
+          "Financial Coach"
+        ],
+        "summary": "Get Thread Messages",
+        "operationId": "get_thread_messages_api_v1_coach_threads__thread_id__messages_get",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Thread Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "title": "Response Get Thread Messages Api V1 Coach Threads  Thread Id  Messages Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/webhooks/paypal": {
+      "post": {
+        "tags": [
+          "PayPal Webhooks"
+        ],
+        "summary": "Handle Paypal Webhook",
+        "description": "Ingests, verifies, and atomically settles incoming PayPal Webhook notifications.",
+        "operationId": "handle_paypal_webhook_api_v1_webhooks_paypal_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/paypal/balance": {
+      "get": {
+        "tags": [
+          "PayPal Balance & Sync"
+        ],
+        "summary": "Get Paypal Account Balance",
+        "description": "Query PayPal Sandbox Reporting API (`GET /v1/reporting/balances`) for account balance.",
+        "operationId": "get_paypal_account_balance_api_v1_paypal_balance_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Get Paypal Account Balance Api V1 Paypal Balance Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/paypal/sync-balance": {
+      "post": {
+        "tags": [
+          "PayPal Balance & Sync"
+        ],
+        "summary": "Sync Paypal Account Balance",
+        "description": "Detect actual PayPal account balance and synchronize all 5 Trinity buckets\nvia zero-sum double-entry transfers according to the user's BudgetPolicy.",
+        "operationId": "sync_paypal_account_balance_api_v1_paypal_sync_balance_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/PayPalSyncRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Sync Paypal Account Balance Api V1 Paypal Sync Balance Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/paypal/rollover": {
+      "post": {
+        "tags": [
+          "PayPal Balance & Sync"
+        ],
+        "summary": "Trigger Midnight Rollover",
+        "description": "Execute the Midnight Rollover lifecycle for the authenticated user.",
+        "operationId": "trigger_midnight_rollover_api_v1_paypal_rollover_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/RolloverTriggerRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Trigger Midnight Rollover Api V1 Paypal Rollover Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/paypal/payday": {
+      "post": {
+        "tags": [
+          "PayPal Balance & Sync"
+        ],
+        "summary": "Trigger Payday Allocation",
+        "description": "Execute the Payday Inflow & Automated Vault Payout lifecycle.",
+        "operationId": "trigger_payday_allocation_api_v1_paypal_payday_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaydayTriggerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Trigger Payday Allocation Api V1 Paypal Payday Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/partner/approve/{token}": {
+      "get": {
+        "tags": [
+          "Accountability Partner"
+        ],
+        "summary": "Inspect Partner Approval",
+        "description": "Public inspection endpoint for an accountability partner to review\nthe proposed expenditure before deciding.",
+        "operationId": "inspect_partner_approval_api_v1_partner_approve__token__get",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Inspect Partner Approval Api V1 Partner Approve  Token  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/partner/approve/{token}/decision": {
+      "post": {
+        "tags": [
+          "Accountability Partner"
+        ],
+        "summary": "Submit Partner Decision",
+        "description": "Public decision submission endpoint for an accountability partner.\nApproving unlocks spend immediately with 0s cooldown delay.",
+        "operationId": "submit_partner_decision_api_v1_partner_approve__token__decision_post",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PartnerDecisionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Submit Partner Decision Api V1 Partner Approve  Token  Decision Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Health Check",
+        "description": "System Health Check Endpoint.\nReturns service health status, version, and active PayPal environment.\nUsed by Render health monitors and container orchestration.",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Root",
+        "description": "Root Welcome Endpoint.\nDirects developers to interactive Swagger UI (/docs) and health check.",
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ActionCard": {
+        "properties": {
+          "action_type": {
+            "type": "string",
+            "title": "Action Type",
+            "description": "'paypal_checkout', 'sweep_to_vault', 'stage_batch', 'open_override', or 'none'"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "description": "User-facing CTA button label"
+          },
+          "short_tag": {
+            "type": "string",
+            "title": "Short Tag",
+            "description": "Concise 2-5 word summary tag (e.g., 'groceries', 'takeout')"
+          },
+          "utterance": {
+            "type": "string",
+            "title": "Utterance"
+          },
+          "amount_cents": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Amount Cents"
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency",
+            "default": "USD"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category",
+            "default": "general"
+          },
+          "necessity": {
+            "type": "string",
+            "title": "Necessity",
+            "default": "freedom"
+          },
+          "target_bucket": {
+            "type": "string",
+            "title": "Target Bucket",
+            "default": "freedom"
+          },
+          "merchant_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merchant Name"
+          },
+          "intent_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intent Id"
+          },
+          "is_emergency": {
+            "type": "boolean",
+            "title": "Is Emergency",
+            "default": false
+          },
+          "verdict": {
+            "type": "string",
+            "title": "Verdict",
+            "description": "'accepted', 'rejected', or 'refer_to_coach'",
+            "default": "accepted"
+          }
+        },
+        "type": "object",
+        "required": [
+          "action_type",
+          "label",
+          "short_tag",
+          "utterance",
+          "amount_cents"
+        ],
+        "title": "ActionCard",
+        "description": "Pre-configured 1-tap action button returned by Quick Intent or the Coach.\nAllows single-click PayPal checkout, Vault sweep, Batch staging, or Escape Window launch."
+      },
+      "BatchDispatcherProposal": {
+        "properties": {
+          "coach_message": {
+            "type": "string",
+            "title": "Coach Message",
+            "description": "Empathetic, clear explanation of the proposed batch payment plan."
+          },
+          "total_batch_amount_minor": {
+            "type": "integer",
+            "title": "Total Batch Amount Minor",
+            "description": "Sum of all recommended batch items in integer minor units (cents)",
+            "default": 0
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BatchPaymentItemDTO"
+            },
+            "type": "array",
+            "title": "Items",
+            "description": "List of queued obligations for user review and veto.",
+            "default": []
+          },
+          "risk_assessment": {
+            "title": "Risk Assessment",
+            "description": "Security note verifying that emergency and primary bank funds remain untouched."
+          },
+          "vault_balance_minor": {
+            "type": "integer",
+            "title": "Vault Balance Minor",
+            "description": "Available balance in Vault (cents)",
+            "default": 0
+          },
+          "bills_balance_minor": {
+            "type": "integer",
+            "title": "Bills Balance Minor",
+            "description": "Available balance in Reserved Bills (cents)",
+            "default": 0
+          },
+          "safe_to_execute": {
+            "type": "boolean",
+            "title": "Safe To Execute",
+            "description": "True if isolated funds cover total batch",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "coach_message",
+          "risk_assessment"
+        ],
+        "title": "BatchDispatcherProposal"
+      },
+      "BatchExecuteRequest": {
+        "properties": {
+          "approved_item_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Approved Item Ids",
+            "description": "List of approved BatchPaymentItem UUIDs"
+          },
+          "source_bucket": {
+            "type": "string",
+            "title": "Source Bucket",
+            "description": "Fund source: 'bills' or 'vault'",
+            "default": "bills"
+          }
+        },
+        "type": "object",
+        "required": [
+          "approved_item_ids"
+        ],
+        "title": "BatchExecuteRequest"
+      },
+      "BatchExecutionItemResult": {
+        "properties": {
+          "item_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Item Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "paypal_payout_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paypal Payout Id"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item_id",
+          "title",
+          "status"
+        ],
+        "title": "BatchExecutionItemResult"
+      },
+      "BatchExecutionSummary": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "'completed', 'partial_failure', or 'failed'",
+            "default": "completed"
+          },
+          "payout_batch_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payout Batch Id",
+            "description": "PayPal Payout Batch ID from /v1/payments/payouts"
+          },
+          "batch_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch Status",
+            "description": "PayPal Batch Status (SUCCESS, PENDING, PROCESSING)"
+          },
+          "executed_count": {
+            "type": "integer",
+            "title": "Executed Count",
+            "description": "Number of successfully executed payouts",
+            "default": 0
+          },
+          "failed_count": {
+            "type": "integer",
+            "title": "Failed Count",
+            "description": "Number of failed payouts",
+            "default": 0
+          },
+          "total_amount_minor": {
+            "type": "integer",
+            "title": "Total Amount Minor",
+            "description": "Total amount successfully executed (cents)",
+            "default": 0
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/BatchExecutionItemResult"
+            },
+            "type": "array",
+            "title": "Results",
+            "description": "Item-by-item execution results",
+            "default": []
+          },
+          "remaining_isolated_balance_minor": {
+            "type": "integer",
+            "title": "Remaining Isolated Balance Minor",
+            "description": "Remaining balance in source bucket (cents)",
+            "default": 0
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "Summary message",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "BatchExecutionSummary"
+      },
+      "BatchPaymentItemDTO": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id",
+            "description": "Database UUID if item is already staged"
+          },
+          "bill_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bill Id",
+            "description": "Linked bill ID if from scheduled bills"
+          },
+          "intent_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intent Id",
+            "description": "Linked intent ID if from quick intent or chat"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Name of the bill or obligation, e.g., 'Apartment Rent'"
+          },
+          "amount_minor": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Amount Minor",
+            "description": "Exact monetary amount in integer minor units (cents)"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category",
+            "description": "Category of the expense, e.g., 'Rent', 'Utilities'",
+            "default": "Bills"
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency",
+            "description": "Currency code",
+            "default": "USD"
+          },
+          "source_bucket": {
+            "type": "string",
+            "title": "Source Bucket",
+            "description": "Source bucket: 'bills' or 'vault'",
+            "default": "bills"
+          },
+          "recommended": {
+            "type": "boolean",
+            "title": "Recommended",
+            "description": "True if the AI strongly recommends paying this in current batch",
+            "default": true
+          },
+          "recipient_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recipient Email",
+            "description": "PayPal recipient email"
+          },
+          "payee_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payee Email",
+            "description": "Alias for recipient_email"
+          },
+          "recipient_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recipient Name",
+            "description": "Alias for title"
+          },
+          "due_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date",
+            "description": "Due date string if applicable"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note",
+            "description": "Note or description of the staged item"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Status of staged item",
+            "default": "pending_approval"
+          },
+          "paypal_payout_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paypal Payout Id",
+            "description": "PayPal Payout batch ID"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message",
+            "description": "Error reason if failed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "amount_minor"
+        ],
+        "title": "BatchPaymentItemDTO"
+      },
+      "BatchStageIntentRequest": {
+        "properties": {
+          "intent_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intent Id",
+            "description": "Optional Intent UUID to link"
+          },
+          "recipient_email": {
+            "type": "string",
+            "title": "Recipient Email",
+            "description": "PayPal recipient email for payout"
+          },
+          "amount_cents": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Amount Cents",
+            "description": "Amount in minor units (cents)"
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency",
+            "description": "Currency code",
+            "default": "USD"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category",
+            "description": "Category of the expense (e.g., 'bills', 'utilities', 'rent')",
+            "default": "bills"
+          },
+          "source_bucket": {
+            "type": "string",
+            "title": "Source Bucket",
+            "description": "Source bucket: 'bills' or 'vault'",
+            "default": "bills"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note",
+            "description": "Optional note or utterance describing the batch item"
+          }
+        },
+        "type": "object",
+        "required": [
+          "recipient_email",
+          "amount_cents"
+        ],
+        "title": "BatchStageIntentRequest"
+      },
+      "BatchStageIntentResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success"
+          },
+          "batch_item_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Batch Item Id"
+          },
+          "recipient_email": {
+            "type": "string",
+            "title": "Recipient Email"
+          },
+          "amount_cents": {
+            "type": "integer",
+            "title": "Amount Cents"
+          },
+          "source_bucket": {
+            "type": "string",
+            "title": "Source Bucket"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "batch_item_id",
+          "recipient_email",
+          "amount_cents",
+          "source_bucket",
+          "status"
+        ],
+        "title": "BatchStageIntentResponse"
+      },
+      "BatchStatusResponse": {
+        "properties": {
+          "payout_batch_id": {
+            "type": "string",
+            "title": "Payout Batch Id"
+          },
+          "batch_status": {
+            "type": "string",
+            "title": "Batch Status"
+          },
+          "time_created": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time Created"
+          },
+          "time_completed": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time Completed"
+          },
+          "total_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Amount"
+          },
+          "fees": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fees"
+          },
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "payout_batch_id",
+          "batch_status"
+        ],
+        "title": "BatchStatusResponse"
+      },
+      "CoachDecision": {
+        "properties": {
+          "reply": {
+            "type": "string",
+            "title": "Reply"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "'accepted', 'rejected', 'refer_to_coach', or 'info'",
+            "default": "info"
+          },
+          "action_type": {
+            "type": "string",
+            "title": "Action Type",
+            "description": "'paypal_checkout', 'sweep_to_vault', 'stage_batch', 'open_override', or 'none'",
+            "default": "none"
+          },
+          "short_tag": {
+            "type": "string",
+            "title": "Short Tag",
+            "description": "Concise 2-5 word summary tag for user review and RAG memory",
+            "default": "general query"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "necessity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Necessity"
+          },
+          "target_bucket": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Bucket"
+          },
+          "amount_cents": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Cents"
+          },
+          "merchant_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merchant Name"
+          },
+          "is_emergency": {
+            "type": "boolean",
+            "title": "Is Emergency",
+            "default": false
+          },
+          "rationale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rationale"
+          },
+          "flags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Flags",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "reply"
+        ],
+        "title": "CoachDecision",
+        "description": "Monolithic single-call LLM structured output combining conversational voice\nwith deterministic action metadata and a 2-5 word RAG tag."
+      },
+      "CoachExecuteActionRequest": {
+        "properties": {
+          "action_type": {
+            "type": "string",
+            "title": "Action Type",
+            "description": "'paypal_checkout', 'sweep_to_vault', or 'stage_batch'"
+          },
+          "utterance": {
+            "type": "string",
+            "title": "Utterance"
+          },
+          "short_tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Short Tag"
+          },
+          "amount_cents": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Amount Cents",
+            "description": "Amount in minor units (cents)"
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency",
+            "default": "USD"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "necessity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Necessity"
+          },
+          "target_bucket": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Bucket"
+          },
+          "merchant_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merchant Name"
+          },
+          "intent_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intent Id"
+          },
+          "is_emergency": {
+            "type": "boolean",
+            "title": "Is Emergency",
+            "default": false
+          },
+          "auto_capture_demo": {
+            "type": "boolean",
+            "title": "Auto Capture Demo",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "action_type",
+          "utterance",
+          "amount_cents"
+        ],
+        "title": "CoachExecuteActionRequest",
+        "description": "Payload sent when the user taps a 1-tap ActionCard inside the Coach sidebar."
+      },
+      "CoachExecuteActionResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "action_type": {
+            "type": "string",
+            "title": "Action Type"
+          },
+          "short_tag": {
+            "type": "string",
+            "title": "Short Tag"
+          },
+          "amount_cents": {
+            "type": "integer",
+            "title": "Amount Cents"
+          },
+          "source_bucket": {
+            "type": "string",
+            "title": "Source Bucket"
+          },
+          "destination_bucket": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Destination Bucket"
+          },
+          "intent_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intent Id"
+          },
+          "paypal_order_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paypal Order Id"
+          },
+          "paypal_capture_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paypal Capture Id"
+          },
+          "approval_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approval Url"
+          },
+          "transfer_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transfer Id"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "action_type",
+          "short_tag",
+          "amount_cents",
+          "source_bucket",
+          "message"
+        ],
+        "title": "CoachExecuteActionResponse",
+        "description": "Result of executing a 1-tap Coach ActionCard."
+      },
+      "CoachMessageRequest": {
+        "properties": {
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thread Id"
+          },
+          "utterance": {
+            "type": "string",
+            "title": "Utterance"
+          },
+          "chart_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chart Id"
+          },
+          "filter_context": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filter Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "utterance"
+        ],
+        "title": "CoachMessageRequest"
+      },
+      "CoachMessageResponse": {
+        "properties": {
+          "thread_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Thread Id"
+          },
+          "message_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Message Id"
+          },
+          "reply": {
+            "type": "string",
+            "title": "Reply"
+          },
+          "short_tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Short Tag"
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CoachDecision"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "action_card": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActionCard"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "citations": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Citations"
+          },
+          "suggest_intent": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggest Intent"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          }
+        },
+        "type": "object",
+        "required": [
+          "thread_id",
+          "message_id",
+          "reply"
+        ],
+        "title": "CoachMessageResponse"
+      },
+      "DeepLedgerItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "transfer_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Transfer Id"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "short_tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Short Tag"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "bucket": {
+            "type": "string",
+            "title": "Bucket"
+          },
+          "amount": {
+            "type": "integer",
+            "title": "Amount"
+          },
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Direction",
+            "default": "DEBIT"
+          },
+          "entry_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry Kind",
+            "default": "standard"
+          },
+          "counterparty_bucket": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counterparty Bucket"
+          },
+          "memo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memo"
+          },
+          "running_balance": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Running Balance",
+            "default": 0
+          },
+          "is_internal_transfer": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Internal Transfer",
+            "default": false
+          },
+          "necessity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Necessity"
+          },
+          "utterance": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Utterance"
+          },
+          "merchant": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merchant"
+          },
+          "paypal_order_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paypal Order Id"
+          },
+          "paypal_capture_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paypal Capture Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "transfer_id",
+          "created_at",
+          "bucket",
+          "amount",
+          "state"
+        ],
+        "title": "DeepLedgerItem"
+      },
+      "DeepLedgerResponse": {
+        "properties": {
+          "total_count": {
+            "type": "integer",
+            "title": "Total Count"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DeepLedgerItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "aggregates": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Aggregates"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_count",
+          "items",
+          "aggregates"
+        ],
+        "title": "DeepLedgerResponse"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "IntentCaptureRequest": {
+        "properties": {
+          "paypal_order_id": {
+            "type": "string",
+            "title": "Paypal Order Id"
+          },
+          "payer_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payer Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "paypal_order_id"
+        ],
+        "title": "IntentCaptureRequest"
+      },
+      "IntentCreate": {
+        "properties": {
+          "utterance": {
+            "type": "string",
+            "title": "Utterance"
+          },
+          "amount": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Amount",
+            "description": "Amount in minor units (cents)"
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency",
+            "default": "USD"
+          },
+          "merchant_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merchant Name"
+          },
+          "short_tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Short Tag"
+          }
+        },
+        "type": "object",
+        "required": [
+          "utterance",
+          "amount"
+        ],
+        "title": "IntentCreate"
+      },
+      "IntentExecuteRequest": {
+        "properties": {
+          "return_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return Url"
+          },
+          "cancel_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancel Url"
+          }
+        },
+        "type": "object",
+        "title": "IntentExecuteRequest"
+      },
+      "IntentExecuteResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "paypal_order_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paypal Order Id"
+          },
+          "approval_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approval Url"
+          },
+          "short_tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Short Tag"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "IntentExecuteResponse"
+      },
+      "IntentOrderStatusResponse": {
+        "properties": {
+          "intent_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Intent Id"
+          },
+          "paypal_order_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paypal Order Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "order_status": {
+            "type": "string",
+            "title": "Order Status"
+          },
+          "approval_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approval Url"
+          },
+          "payer_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payer Id"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "intent_id",
+          "status",
+          "order_status"
+        ],
+        "title": "IntentOrderStatusResponse"
+      },
+      "IntentResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "verdict": {
+            "type": "string",
+            "title": "Verdict",
+            "default": "accepted"
+          },
+          "amount": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount",
+            "description": "Intent amount in minor currency units (cents)"
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency",
+            "description": "Currency code (USD)",
+            "default": "USD"
+          },
+          "short_tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Short Tag"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "necessity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Necessity"
+          },
+          "recommended_bucket": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommended Bucket"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "rationale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rationale"
+          },
+          "flags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Flags",
+            "default": []
+          },
+          "source_bucket": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Bucket"
+          },
+          "balances_after_preview": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Balances After Preview",
+            "default": {}
+          },
+          "override_required": {
+            "type": "boolean",
+            "title": "Override Required",
+            "default": false
+          },
+          "is_emergency": {
+            "type": "boolean",
+            "title": "Is Emergency",
+            "default": false
+          },
+          "cooldown_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cooldown Seconds"
+          },
+          "action_card": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActionCard"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status"
+        ],
+        "title": "IntentResponse"
+      },
+      "OverrideCreate": {
+        "properties": {
+          "intent_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Intent Id"
+          },
+          "body": {
+            "type": "string",
+            "title": "Body"
+          }
+        },
+        "type": "object",
+        "required": [
+          "intent_id",
+          "body"
+        ],
+        "title": "OverrideCreate"
+      },
+      "PartnerDecisionRequest": {
+        "properties": {
+          "decision": {
+            "type": "string",
+            "title": "Decision"
+          }
+        },
+        "type": "object",
+        "required": [
+          "decision"
+        ],
+        "title": "PartnerDecisionRequest"
+      },
+      "PartnerOverrideResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "ready_at": {
+            "type": "string",
+            "title": "Ready At"
+          },
+          "cooldown_seconds": {
+            "type": "integer",
+            "title": "Cooldown Seconds"
+          },
+          "partner_required": {
+            "type": "boolean",
+            "title": "Partner Required"
+          },
+          "is_emergency": {
+            "type": "boolean",
+            "title": "Is Emergency",
+            "default": false
+          },
+          "short_tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Short Tag"
+          },
+          "partner_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partner Token"
+          },
+          "partner_approval_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partner Approval Url"
+          },
+          "partner_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partner Email"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "ready_at",
+          "cooldown_seconds",
+          "partner_required"
+        ],
+        "title": "PartnerOverrideResponse"
+      },
+      "PayPalSyncRequest": {
+        "properties": {
+          "override_balance_cents": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Override Balance Cents"
+          }
+        },
+        "type": "object",
+        "title": "PayPalSyncRequest"
+      },
+      "PaydayTriggerRequest": {
+        "properties": {
+          "gross_income_cents": {
+            "type": "integer",
+            "title": "Gross Income Cents"
+          },
+          "dispatch_vault_payout": {
+            "type": "boolean",
+            "title": "Dispatch Vault Payout",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "gross_income_cents"
+        ],
+        "title": "PaydayTriggerRequest"
+      },
+      "PolicyUpdate": {
+        "properties": {
+          "vault_skim_bps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 10000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vault Skim Bps"
+          },
+          "daily_amount": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daily Amount"
+          },
+          "freedom_monthly_amount": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Freedom Monthly Amount"
+          },
+          "bills_monthly_amount": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bills Monthly Amount"
+          },
+          "bank_spend_requires_override": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Spend Requires Override"
+          },
+          "vault_spend_allowed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vault Spend Allowed"
+          },
+          "override_min_chars": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Override Min Chars"
+          },
+          "override_cooldown_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Override Cooldown Seconds"
+          },
+          "partner_required_for_bank": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partner Required For Bank"
+          }
+        },
+        "type": "object",
+        "title": "PolicyUpdate"
+      },
+      "RolloverTriggerRequest": {
+        "properties": {
+          "sweep_surplus_to_vault": {
+            "type": "boolean",
+            "title": "Sweep Surplus To Vault",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "RolloverTriggerRequest"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

@@ -61,7 +61,7 @@ async def create_override(
     policy = res_p.first()
 
     min_chars = policy.override_min_chars if policy else 200
-    std_cooldown_secs = policy.override_cooldown_seconds if policy else 180
+    std_cooldown_secs = policy.override_cooldown_seconds if policy else 15 #Set to 15s For Demo Purposes
 
     # Verify whether the intent + explanation constitute a genuine emergency
     trimmed_body = body.body.strip()

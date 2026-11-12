@@ -85,16 +85,6 @@ To ensure seamless integration between the asynchronous FastAPI backend, the Rea
 
 ---
 
-## ☁️ Foundational Cloud Hosting on Render (Render Sponsor Prize)
-
-FireWallet is designed for immediate cloud deployment on **Render** via a unified Infrastructure-as-Code specification ([`render.yaml`](./render.yaml)):
-- **Backend Web Service (`firewallet-api`):** Asynchronous Python 3 environment running FastAPI via Uvicorn, serving live REST APIs and receiving external PayPal sandbox webhooks.
-- **Frontend Static Site (`firewallet-web`):** High-performance static web server delivering the React + Vite + Tailwind CSS PWA.
-- **Managed PostgreSQL Database (`firewallet-db`):** Cloud relational ledger storing double-entry transactions, user policies, and audit logs.
-- **Live Production URL:** The live hosted demo is available directly for judges at **[https://firewallet-web.onrender.com](https://firewallet-web.onrender.com)**.
-
----
-
 ## 📊 Foundational Desktop Workbench with AG Grid (AG Grid Sponsor Prize)
 
 While mobile interactions prioritize a minimalist, thumb-friendly Heads-Up Display, desktop users unlock the **Foundational Deep Analytics & Advanced Ledger Workbench** (`/analytics/deep-ledger`):
@@ -112,7 +102,7 @@ A pre-configured Postman Collection is located at the root of the repository:
 
 ### How to Run in Postman:
 1. Open Postman $\rightarrow$ Click **Import** $\rightarrow$ Select `postman_collection.json`.
-2. Ensure the collection variable `baseUrl` is set to `http://localhost:8000` (or your live Render URL).
+2. Ensure the collection variable `baseUrl` is set to `http://localhost:8000`.
 3. Execute the automated test folder to verify:
    - System Health (`GET /health`)
    - Trinity Bucket Balances (`GET /api/v1/buckets`)
@@ -167,10 +157,10 @@ Access the Mobile HUD at `http://localhost:5173`. Use browser DevTools (F12) in 
 
 | Document | Description |
 | :--- | :--- |
-| **[docs/TOOL_STACK.md](./docs/TOOL_STACK.md)** | Master ecosystem directory (FastAPI, SQLite/Postgres, React/Tailwind, PayPal, Render, AG Grid, Postman, APIMatic). |
-| **[docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)** | System design, split monorepo layout, SQLModel schemas, and the 3-agent pipeline. |
+| **[docs/TOOL_STACK.md](./docs/TOOL_STACK.md)** | Master ecosystem directory (FastAPI, SQLite/Postgres, React/Tailwind, PayPal Sandbox, AG Grid, Postman, APIMatic). |
+| **[docs/architecture.md](./docs/architecture.md)** | System design, split monorepo layout, SQLModel schemas, and the 3-agent pipeline. |
 | **[docs/TRINITY_RULES.md](./docs/TRINITY_RULES.md)** | Mathematical specifications for Bank, Daily Rollover, Freedom, Vault, and Escape Window. |
-| **[docs/SETUP_GUIDE.md](./docs/SETUP_GUIDE.md)** | Step-by-step local setup, PayPal sandbox credentials, and Render cloud blueprint guide. |
+| **[docs/SETUP_GUIDE.md](./docs/SETUP_GUIDE.md)** | Step-by-step local setup, PayPal sandbox credentials, and environment guide. |
 | **[docs/insights.md](./docs/insights.md)** | Financial Coach Advanced Reasoning Model, chart literacy loops (`chart_id`), and AG Grid queries. |
 | **[docs/paypal_integration.md](./docs/paypal_integration.md)** | PayPal Sandbox REST API mappings (Orders v2, Payouts, Identity, Webhook verification). |
 | **[docs/api_contracts.md](./docs/api_contracts.md)** | REST JSON schemas, DTOs, deep ledger parameters, and error responses. |
